@@ -34,10 +34,25 @@ export function itemDetails({value: v, threadId}: Item): string {
 }
 export function details(state: State): string {
   const items = state.items.filter(item => item.value.type !== 'userMessage' && !(item.threadId === state.threadId && item.value.type === 'agentMessage' && item.value.phase === 'final_answer'));
-  return [...items.map(itemDetails), ...[...state.details].map(([title, body]) => `${title}\n${body}`)].join('\n\n');
+  const activity = [...state.activities.values()].map(agent => `${agent.name} · ${agent.text}`).join('\n');
+  return [counts(state), activity, ...items.map(itemDetails), ...[...state.details].map(([title, body]) => `${title}\n${body}`)].join('\n\n');
 }
 export function counts(state: State): string {
   const commands = state.items.filter(item => item.value.type === 'commandExecution').length;
   const files = new Set(state.items.flatMap(item => item.value.type === 'fileChange' ? item.value.changes.map(c => c.path) : []));
   return `${commands} commands · ${files.size} changed files`;
+}
+
+/** Keep internal agent paths and completed-agent rows in Details. */
+export function activityStatus(state: State): {text: string; running: boolean; waiting: boolean} {
+  if (state.phase !== 'ready') return {text: state.phase === 'connecting' ? 'Connecting…' : state.phase === 'picking' ? 'Choose a session' : 'Disconnected', running: false, waiting: false};
+  const children = [...state.activities].filter(([id, activity]) => id !== state.threadId && activity.running && !state.prompts.some(prompt => prompt.threadId === id)).length;
+  const rootRunning = !!(state.activeTurn || state.sending || state.interrupting);
+  const waiting = state.prompts.length > 0;
+  const running = !waiting && (rootRunning || children > 0);
+  const root = state.activities.get(state.threadId ?? '');
+  const text = waiting ? 'Waiting for your input' : state.interrupting ? 'Interrupting…'
+    : state.sending && !state.activeTurn ? 'Starting…'
+    : rootRunning ? (root?.text === 'Ready' || !root ? 'Working' : root.text) : children ? 'Agents working' : 'Ready';
+  return {text: text + (children ? ` · ${children} agent${children === 1 ? '' : 's'} active` : ''), running, waiting};
 }

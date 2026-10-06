@@ -66,24 +66,31 @@ try {
     await rpc.request('turn/start', {threadId: created.thread.id, input: [{type: 'text', text: 'Say hello.', text_elements: []}]});
     const turn = await completed;
     assert.equal(turn.status, 'completed', JSON.stringify(turn.error));
+    await rpc.request('thread/name/set', {threadId: created.thread.id, name: 'Hush smoke saved'});
     await rpc.close();
     rpc = new RpcClient('codex', args, home, {...process.env, CODEX_HOME: home}, 30_000);
     const session = new Session(rpc, parseOptions(['resume', created.thread.id, '-m', 'hush-overridden', '-c', 'model_reasoning_effort="low"'], resumedDirectory));
     await session.start();
     assert.equal(session.state.phase, 'ready', session.state.alerts.join('\n'));
     assert.equal(session.state.model, 'hush-overridden');
+    assert.equal(session.state.name, 'Hush smoke saved');
+    await session.rename('Hush smoke renamed');
     assert.match(conversation(session.state), /Hush smoke answer/);
     assert.match(conversation(session.state), /Say hello/);
     const sessions = await rpc.request('thread/list', {cwd: home, modelProviders: [], sortKey: 'updated_at'});
-    assert.ok(sessions.data.some(thread => thread.id === created.thread.id));
+    assert.equal(sessions.data.find(thread => thread.id === created.thread.id)?.name, 'Hush smoke renamed');
     const resumed = await rpc.request('thread/resume', {threadId: created.thread.id, excludeTurns: true});
     assert.equal(resumed.reasoningEffort, 'low');
     assert.equal(resumed.cwd, resumedDirectory);
     assert.ok(resumed.runtimeWorkspaceRoots.includes(resumedDirectory), JSON.stringify(resumed.runtimeWorkspaceRoots));
     await session.stop();
+    rpc = await connect();
+    const named = await rpc.request('thread/resume', {threadId: created.thread.id, excludeTurns: true});
+    assert.equal(named.thread.name, 'Hush smoke renamed');
+    await rpc.close();
   }
   assert.equal(requests, 2);
-  console.log(`${version}: handshake, streaming, restart, Hush resume, model/config overrides, and session list passed for legacy and paginated history. Two local fake-model requests; no paid inference.`);
+  console.log(`${version}: handshake, streaming, restart, Hush resume, model/config overrides, session renaming across restarts, and session list passed for legacy and paginated history. Two local fake-model requests; no paid inference.`);
 } finally {
   await rpc?.close();
   model.closeAllConnections();

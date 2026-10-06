@@ -18,16 +18,15 @@ test('Markdown renders headings, emphasis, lists and literal code', () => {
   assert.doesNotMatch(plain(output), /```|# Heading|\*\*Bold\*\*/);
 });
 
-test('tables keep long link destinations outside cells and fit narrow terminals', () => {
+test('tables wrap inline link destinations to fit narrow terminals', () => {
   const source = '| File | Change |\n| --- | --- |\n| [app.ts](/very/long/path/app.ts:12) | **fixed** 界界界界 |';
   for (const width of [10, 15, 34, 79]) {
     const output = markdown(source, width, colors);
     assert.ok(output.every(line => stringWidth(line) <= width), `width ${width}`);
     const text = plain(output.join('\n'));
     if (width === 79) {
-      assert.match(text, /app.ts\[1\]/);
-      assert.match(text, /1\. \/very\/long\/path\/app.ts:12/);
-      assert.doesNotMatch(text.split('\n')[2]!, /very\/long/);
+      assert.match(text, /app.ts \(\/very\/long\/path\/app.ts:12\)/);
+      assert.doesNotMatch(text, /\[1\]|1\. \/very/);
     }
   }
 });
@@ -68,4 +67,12 @@ test('user text stays literal and has a distinct color from assistant Markdown',
   assert.match(output, /\x1b\[37m/);
   assert.match(plain(output), /\*\*literal prompt\*\*/);
   assert.doesNotMatch(plain(output), /\*\*formatted reply\*\*/);
+});
+
+
+test('numbered instructions keep each URL in its own step without added footnotes', () => {
+  const source = '1. Open [recordings](http://localhost:8000/recordings).\n2. Open [review](http://localhost:8000/review).\n3. Try <https://example.com>.';
+  const output = markdown(source, 100, noColor).join('\n');
+  assert.equal(output, '1. Open recordings (http://localhost:8000/recordings).\n2. Open review (http://localhost:8000/review).\n3. Try https://example.com.');
+  assert.doesNotMatch(output, /\[1\]|\[2\]/);
 });

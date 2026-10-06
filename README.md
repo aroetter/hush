@@ -56,8 +56,7 @@ Codex
 The parser now accepts empty input. The tests pass.
 
 Codex · Running tests
-Agent 2 · Reviewing the parser
-▸ Details · 4 commands · 2 changed files
+▸ Details · Ctrl+O to expand
 > ▏
 ```
 
@@ -100,6 +99,16 @@ hush resume SESSION_ID -m MODEL -c model_reasoning_effort=high
 
 Stock Codex CLI sessions and Hush sessions share Codex's storage. In the picker,
 use **Up/Down** to select, **Enter** to open, and **n** to load more sessions.
+Name the current session so it is easy to recognize in the picker:
+
+```text
+/rename Willis browser QA
+```
+
+The name is saved by Codex and appears in Hush's header and resume picker.
+Renaming does not send a message to the model. During an approval or question,
+text answers that prompt; finish the prompt before using `/rename`.
+
 Recent conversation history loads first; **Ctrl+B** loads older messages.
 
 **The launch directory is always the working directory**, including when resuming
@@ -119,6 +128,20 @@ a link for you to open yourself and confirm afterward.
 
 Hush inherits Codex's permission settings. It never automatically answers an approval
 request. Unsupported server requests are rejected with a visible notice.
+
+### Activity and notices
+
+One status row summarizes current work and the number of active agents.
+Individual agent names, completed-agent states, and command/file counts stay in
+Details. The toggle always shows its shortcut: `▸ Details · Ctrl+O to expand`.
+
+A cyan `| / - \` spinner marks an active turn or agent. It stops when work finishes,
+is interrupted, or disconnects. A yellow `?` means Hush is waiting for your input.
+The spinner indicates active work, not a measurement of progress.
+
+Routine automatic approvals stay in Details. Approval requests, denied reviews,
+errors, and other warnings remain visible. Failures loaded from saved history stay
+in Details instead of appearing as new errors.
 
 ## Keyboard
 
@@ -212,9 +235,13 @@ incompatible changes may require Hush code changes too.
 
 Your messages are cyan; Codex replies are white, with bold speaker labels.
 Replies render Markdown headings, emphasis, lists, quotes, code blocks, and tables.
-Long links use numbered destination notes; narrow terminals show table rows as
-labeled fields. Status lines and keyboard hints are gray. Commands, diffs, and logs
+Link destinations appear beside their labels, including within numbered steps;
+narrow terminals show table rows as labeled fields. Status lines and keyboard hints are gray. Commands, diffs, and logs
 stay in the details view.
+
+Hush does not paraphrase replies. It renders Markdown and wraps text to the terminal
+width; on narrow screens, tables become labeled fields. It strips incoming terminal
+control sequences and keeps technical events in Details.
 
 Set `NO_COLOR=1` to disable colors. User messages and approval details remain literal
 text. Code blocks have no syntax highlighting.

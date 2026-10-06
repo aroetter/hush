@@ -5,6 +5,8 @@ import {createInterface} from 'node:readline';
 import {promisify} from 'node:util';
 import type {InitializeParams} from './protocol/InitializeParams.js';
 import type {InitializeResponse} from './protocol/InitializeResponse.js';
+import type {ThreadSetNameParams} from './protocol/v2/ThreadSetNameParams.js';
+import type {ThreadSetNameResponse} from './protocol/v2/ThreadSetNameResponse.js';
 import type {ThreadStartParams} from './protocol/v2/ThreadStartParams.js';
 import type {ThreadStartResponse} from './protocol/v2/ThreadStartResponse.js';
 import type {ThreadResumeParams} from './protocol/v2/ThreadResumeParams.js';
@@ -25,6 +27,7 @@ export type Id = string | number;
 export interface ServerMessage {method: string; params: Record<string, any>; id?: Id}
 interface Methods {
   initialize: [InitializeParams, InitializeResponse];
+  'thread/name/set': [ThreadSetNameParams, ThreadSetNameResponse];
   'thread/start': [ThreadStartParams, ThreadStartResponse];
   'thread/resume': [ThreadResumeParams, ThreadResumeResponse];
   'thread/list': [ThreadListParams, ThreadListResponse];
