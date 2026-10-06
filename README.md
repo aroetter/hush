@@ -13,8 +13,7 @@ Codex
 The parser now accepts empty input. The tests pass.
 
 Codex · Running tests
-Agent 2 · Reviewing the parser
-▸ Details · 4 commands · 2 changed files
+▸ Details · Ctrl+O to expand
 > ▏
 ```
 
@@ -114,6 +113,10 @@ Hush inherits Codex's permission settings. It never automatically answers an app
 request. Unsupported server requests are rejected with a visible notice.
 
 ### Activity and notices
+
+One status row summarizes current work and the number of active agents.
+Individual agent names, completed-agent states, and command/file counts stay in
+Details. The toggle always shows its shortcut: `▸ Details · Ctrl+O to expand`.
 
 A cyan `| / - \` spinner marks an active turn or agent. It stops when work finishes,
 is interrupted, or disconnects. A yellow `?` means Hush is waiting for your input.
@@ -218,6 +221,10 @@ Replies render Markdown headings, emphasis, lists, quotes, code blocks, and tabl
 Link destinations appear beside their labels, including within numbered steps;
 narrow terminals show table rows as labeled fields. Status lines and keyboard hints are gray. Commands, diffs, and logs
 stay in the details view.
+
+Hush does not paraphrase replies. It renders Markdown and wraps text to the terminal
+width; on narrow screens, tables become labeled fields. It strips incoming terminal
+control sequences and keeps technical events in Details.
 
 Set `NO_COLOR=1` to disable colors. User messages and approval details remain literal
 text. Code blocks have no syntax highlighting.

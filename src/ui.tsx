@@ -1,7 +1,7 @@
 /** Render a bounded terminal screen with independent conversation and details scrolling. */
 import React, {useEffect, useReducer, useState} from 'react';
 import {Box, Text, useInput, usePaste, useWindowSize} from 'ink';
-import {clean, lines, conversationLines, details, counts} from './view.js';
+import {clean, lines, conversationLines, details, activityStatus} from './view.js';
 import type {Session} from './session.js';
 
 /** Keep the draft editable during streaming, and submit only on an explicit Enter. */
@@ -53,7 +53,7 @@ function ActivityRow({name, text, running, waiting}: {name: string; text: string
     const timer = setInterval(() => setFrame(n => (n + 1) % 4), 120);
     return () => clearInterval(timer);
   }, [running]);
-  return <Text color="gray" wrap="truncate-end"><Text color={waiting ? 'yellow' : running ? 'cyan' : 'gray'}>{waiting ? '?' : running ? ['|', '/', '-', '\\'][frame] : '·'}</Text> {clean(name)} · {waiting ? 'Waiting for your input' : clean(text).replace(/\n/g, ' ')}</Text>;
+  return <Text color="gray" wrap="truncate-end"><Text color={waiting ? 'yellow' : running ? 'cyan' : 'gray'}>{waiting ? '?' : running ? ['|', '/', '-', '\\'][frame] : '·'}</Text> {clean(name)} · {clean(text).replace(/\n/g, ' ')}</Text>;
 }
 
 /** A viewport offset is a line index, or null to follow the latest output. */
@@ -83,10 +83,9 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const prompt = state.prompts[0];
   useEffect(() => {setAnswer(''); setQuestionIndex(0); setAnswers({}); setPromptOffset(0);}, [prompt?.id, prompt?.revision]);
   const question = prompt?.questions?.[questionIndex];
-  const activities = [...state.activities.entries()];
-  const activityRows = Math.min(3, activities.length);
-  const alertRows = state.alerts.length ? 2 : 0;
-  const space = Math.max(2, height - 1 - activityRows - alertRows - 1 - 3 - 1);
+  const activity = activityStatus(state);
+  const alertRows = state.alerts.length ? 1 : 0;
+  const space = Math.max(2, height - 1 - 1 - alertRows - 1 - 3 - 1);
   const lowerHeight = prompt || expanded ? Math.max(1, Math.floor(space / 2)) : 0;
   const chatHeight = space - lowerHeight;
   const formatted = conversationLines(state, width);
@@ -185,20 +184,11 @@ export function App({session, version, onExit}: {session: Session; version: stri
       <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · PgUp/PgDn scroll` : `Details · ${focusDetails ? 'scrolling here' : 'Tab to scroll here'} · Ctrl+O close`}</Text>
       <Text color="white">{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
     </Box>}
-    {activities.slice(0, activityRows).map(([id, activity]) => {
-      const waiting = state.prompts.some(request => request.threadId === id);
-      const running = state.phase === 'ready' && !waiting && (id === state.threadId
-        ? !!(state.activeTurn || state.sending || state.interrupting) : activity.running);
-      const text = id === state.threadId && state.sending && !state.activeTurn ? 'Starting…'
-        : id === state.threadId && state.interrupting ? 'Interrupting…'
-        : state.phase === 'disconnected' ? 'Disconnected'
-        : running && activity.text === 'Ready' ? 'Working' : activity.text;
-      return <ActivityRow key={id} name={activity.name} text={text} running={running} waiting={waiting}/>;
-    })}
-    {state.alerts.length > 0 && <Box height={2} flexDirection="column"><Text color="yellow" wrap="truncate-end">{clean(state.alerts.at(-1)!)}</Text><Text color="gray">{state.alerts.length} notice(s) · details contain full text · Ctrl+L dismiss</Text></Box>}
-    <Text color="gray" wrap="truncate-end">{expanded ? '▾' : '▸'} Details · {counts(state)}{activities.length > 3 ? ` · ${activities.length - 3} more agents in details` : ''}{state.historyCursor ? ' · Ctrl+B older messages' : ''}</Text>
+    <ActivityRow name="Codex" {...activity}/>
+    {state.alerts.length > 0 && <Text color="yellow" wrap="truncate-end">! {clean(state.alerts.at(-1)!)}</Text>}
+    <Text color="gray" wrap="truncate-end">{expanded ? '▾ Details · Ctrl+O to close' : '▸ Details · Ctrl+O to expand'}{state.historyCursor ? ' · Ctrl+B older messages' : ''}</Text>
     <Editor key={prompt ? `prompt:${prompt.id}:${prompt.revision}:${questionIndex}` : 'draft'} value={prompt ? answer : draft} onChange={prompt ? setAnswer : setDraft}
       onSubmit={submit} disabled={state.phase !== 'ready' || state.sending || state.interrupting || busy} secret={question?.isSecret ?? false} width={width}/>
-    <Text color="gray" wrap="truncate-end">{state.phase === 'disconnected' ? 'Disconnected · restart Hush to resume · Ctrl+D exit' : state.interrupting ? 'Interrupting…' : 'Enter send · Ctrl+O details · PgUp/PgDn scroll · Ctrl+C stop · Ctrl+D exit'}</Text>
+    <Text color="gray" wrap="truncate-end">{state.phase === 'disconnected' ? 'Disconnected · restart Hush to resume · Ctrl+D exit' : state.interrupting ? 'Interrupting…' : `Enter send · Ctrl+C stop · Ctrl+D exit · PgUp/PgDn scroll${state.alerts.length ? ' · Ctrl+L dismiss alert' : ''}`}</Text>
   </Box>;
 }

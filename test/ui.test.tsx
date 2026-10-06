@@ -95,6 +95,7 @@ test('bracketed multiline paste stays in the draft until Enter', async () => {
 test('scrolling conversation is stable while agent status changes', async () => {
   const {rpc, session} = await ready();
   item(rpc, agent('long', Array.from({length: 60}, (_, i) => `Line ${i}`).join('\n')));
+  rpc.event('turn/started', {threadId: 'root', turn: {id: 'active'}});
   const app = render(<App session={session} version="test" onExit={() => {}}/>);
   await settle();
   assert.match(app.lastFrame()!, /Line 59/);
@@ -242,10 +243,12 @@ test('subagent indicators stop on completion and disconnect', async () => {
   const app = render(<App session={session} version="test" onExit={() => {}}/>);
   try {
     await settle();
-    assert.match(app.lastFrame()!, /[|/\\-] \/root\/check · started/);
+    assert.match(app.lastFrame()!, /[|/\\-] Codex · Agents working · 1 agent active/);
+    assert.doesNotMatch(app.lastFrame()!, /\/root\/check/);
     item(rpc, {type: 'subAgentActivity', id: 'child-end', agentThreadId: 'child', agentPath: '/root/check', kind: 'completed'});
     await settle();
-    assert.match(app.lastFrame()!, /· \/root\/check · completed/);
+    assert.match(app.lastFrame()!, /· Codex · Ready/);
+    assert.doesNotMatch(app.lastFrame()!, /\/root\/check/);
     rpc.emit('fault', new Error('Connection lost'));
     await settle();
     assert.match(app.lastFrame()!, /· Codex · Disconnected/);
@@ -272,5 +275,27 @@ test('/rename saves a session name without sending a model message', async () =>
     assert.match(app.lastFrame()!, /Rename failed/);
     assert.match(app.lastFrame()!, /\/rename Another name/);
     assert.equal(session.state.name, 'Willis browser QA');
+  } finally {app.unmount();}
+});
+
+
+test('one status row summarizes agents and Details makes expansion explicit', async () => {
+  const {rpc, session} = await ready();
+  rpc.event('turn/started', {threadId: 'root', turn: {id: 'active'}});
+  for (let i = 0; i < 4; i++) rpc.event('thread/started', {thread: {id: `child${i}`, parentThreadId: 'root', agentNickname: `/root/worker_${i}`, status: {type: 'active'}}});
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    assert.match(app.lastFrame()!, /Codex · Working · 4 agents active/);
+    assert.match(app.lastFrame()!, /▸ Details · Ctrl\+O to expand/);
+    assert.doesNotMatch(app.lastFrame()!, /\/root\/worker|changed files|commands|notice\(s\)/);
+    app.stdin.write('\x0f'); await settle();
+    assert.match(app.lastFrame()!, /\/root\/worker_3/);
+    assert.match(app.lastFrame()!, /▾ Details · Ctrl\+O to close/);
+    app.stdin.write('\x0f'); await settle();
+    session.alert('A real failure'); await settle();
+    assert.match(app.lastFrame()!, /! A real failure/);
+    assert.match(app.lastFrame()!, /Ctrl\+L dismiss alert/);
+    assert.doesNotMatch(app.lastFrame()!, /notice\(s\)/);
   } finally {app.unmount();}
 });
