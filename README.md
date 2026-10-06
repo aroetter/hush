@@ -3,6 +3,49 @@
 **A quiet terminal UI for Codex.** Keep the conversation in view while agent activity
 updates in place. Open the details panel when you want commands, diffs, or logs.
 
+## Install and run
+
+You need **Node.js 22+**, npm, and **Codex installed on your PATH**. For normal use,
+sign in with `codex login` if you have not already.
+
+Clone Hush and install its command:
+
+```sh
+mkdir -p ~/src
+cd ~/src
+git clone https://github.com/aroetter/hush.git
+cd hush
+npm ci          # Install dependencies
+npm run build   # Compile source into dist/
+npm link        # Make the hush command available outside this directory
+```
+
+Already cloned the repo? Run the last three commands from your Hush checkout.
+`npm run build` alone does not install the command; `npm link` is the one-time step
+that adds it to npm's global bin directory. That directory must be on your PATH.
+If your shell cannot find `hush`, see [Troubleshooting](#troubleshooting).
+
+Start Hush in the repository you want to work on:
+
+```sh
+cd ~/src/reponame    # Replace with your project's directory
+hush
+```
+
+To continue a saved conversation in that project:
+
+```sh
+hush resume         # Pick a session
+hush resume --last  # Or reopen the most recent session here
+```
+
+`npm link` creates symbolic links back to your Hush checkout; it does not copy the
+app or replace Codex. After changing Hush's source, run `npm run build` in the Hush
+checkout, then restart Hush. Keep the checkout in place while using the linked command.
+To uninstall the command: `npm unlink -g @aroetter/hush`.
+
+## What it looks like
+
 ```text
 hush · ~/src/project · your model
 
@@ -21,32 +64,6 @@ Agent 2 · Reviewing the parser
 Hush runs your installed `codex app-server` underneath. Codex handles the model,
 execution, permissions, login, and saved sessions. Hush handles their presentation.
 It does not replace Codex or modify its configuration.
-
-## Quick start
-
-You need **Node.js 22+**, npm, and **Codex installed on your PATH**. For normal use,
-sign in with `codex login` if you have not already.
-
-```sh
-git clone git@github.com:aroetter/hush.git
-cd hush
-npm ci
-npm run build
-npm link
-```
-
-Already have the checkout? Start with `cd ~/src/hush` and skip the clone.
-
-Then run Hush from the project you want to work on:
-
-```sh
-cd ~/src/your-project
-hush
-```
-
-`npm link` installs the separate `hush` command and links it to this checkout.
-After changing Hush's source, run `npm run build` to update that command.
-To uninstall the command: `npm unlink -g @aroetter/hush`.
 
 ## Everyday use
 
