@@ -123,6 +123,9 @@ priority when you use the scroll keys.
 | Ctrl+L | Dismiss notices; their full text stays in details |
 | Ctrl+D | Exit and stop this Hush app-server |
 
+Type `/exit` or `exit` and press Enter to quit, or use Ctrl+D. During an approval
+or question, typed text answers that prompt; Ctrl+D still exits.
+
 Hush uses the terminal's alternate screen and restores your original screen on exit.
 Use its Page Up/Page Down controls instead of terminal scrollback. The terminal must
 be at least **35 columns × 16 rows**. On keyboards without Page Up/Page Down, your
