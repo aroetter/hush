@@ -2,6 +2,7 @@
 import {lines} from './terminal.js';
 export {clean, lines} from './terminal.js';
 import chalk, {type ChalkInstance} from 'chalk';
+import stringWidth from 'string-width';
 import {markdown} from './markdown.js';
 import type {State, Item} from './session.js';
 
@@ -55,4 +56,14 @@ export function activityStatus(state: State): {text: string; running: boolean; w
     : state.sending && !state.activeTurn ? 'Starting…'
     : rootRunning ? (root?.text === 'Ready' || !root ? 'Working' : root.text) : children ? 'Agents working' : 'Ready';
   return {text: text + (children ? ` · ${children} agent${children === 1 ? '' : 's'} active` : ''), running, waiting};
+}
+
+/** Include complete shortcut hints in priority order, without cutting one in half. */
+export function shortcutHints(width: number, hints: string[]): string {
+  let text = '';
+  for (const hint of hints) {
+    const next = text ? `${text} · ${hint}` : hint;
+    if (stringWidth(next) <= width) text = next;
+  }
+  return text;
 }

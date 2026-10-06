@@ -299,3 +299,77 @@ test('one status row summarizes agents and Details makes expansion explicit', as
     assert.doesNotMatch(app.lastFrame()!, /notice\(s\)/);
   } finally {app.unmount();}
 });
+
+test('scrolling up loads older history without moving the visible message; Ctrl+B never loads history', async () => {
+  const {rpc, session} = await ready();
+  item(rpc, agent('recent', 'Recent message'));
+  session.state.historyCursor = 'older';
+  let finish!: (value: unknown) => void;
+  rpc.handler = async () => new Promise(resolve => {finish = resolve;});
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    app.stdin.write('\x02'); await settle();
+    assert.equal(session.state.loadingHistory, false);
+    app.stdin.write('\x0f'); await settle();
+    app.stdin.write('\x1b[5~'); await settle();
+    assert.equal(session.state.loadingHistory, false);
+    app.stdin.write('\x0f'); await settle();
+    app.stdin.write('\x1b[5~'); await settle();
+    assert.equal(session.state.loadingHistory, true);
+    app.stdin.write('\x1b[5~'); await settle();
+    assert.equal(rpc.calls.filter(c => c.method === 'thread/turns/list').length, 1);
+    finish({data: [{id: 'old', status: 'completed', itemsView: 'full', items: [agent('old', 'Older message')]}], nextCursor: null});
+    await settle();
+    assert.match(app.lastFrame()!, /Recent message/);
+    assert.doesNotMatch(app.lastFrame()!, /Older message/);
+    app.stdin.write('\x1b[5~'); await settle();
+    assert.match(app.lastFrame()!, /Older message/);
+  } finally {app.unmount();}
+});
+
+test('standard editing shortcuts work without occupying footer tips', async () => {
+  const {rpc, session} = await ready();
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    assert.doesNotMatch(app.lastFrame()!, /Ctrl\+[ACDEKU]/);
+    app.stdin.write('discard'); await settle();
+    app.stdin.write('\x01'); await settle();
+    app.stdin.write('\x0b'); await settle();
+    app.stdin.write('keep'); await settle();
+    app.stdin.write('\r'); await settle();
+    assert.equal(rpc.calls.find(c => c.method === 'turn/start')!.params.input[0].text, 'keep');
+  } finally {app.unmount();}
+});
+
+test('input history survives an approval without storing the approval answer', async () => {
+  const {rpc, session} = await ready();
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    app.stdin.write('Remember this message'); await settle();
+    app.stdin.write('\r'); await settle();
+    rpc.ask(41, 'item/commandExecution/requestApproval', {threadId: 'root', command: 'command', availableDecisions: ['accept', 'decline']});
+    await settle();
+    app.stdin.write('2'); await settle(); app.stdin.write('\r'); await settle();
+    app.stdin.write('\x10'); await settle();
+    assert.match(app.lastFrame()!, /> Remember this message/);
+    assert.equal(rpc.calls.filter(c => c.method === 'turn/start').length, 1);
+  } finally {app.unmount();}
+});
+
+test('automatic history loading reports failure and preserves the conversation', async () => {
+  const {rpc, session} = await ready();
+  item(rpc, agent('recent', 'Keep this message'));
+  session.state.historyCursor = 'older';
+  rpc.handler = async () => {throw new Error('History unavailable');};
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle(); app.stdin.write('\x1b[5~'); await settle();
+    assert.match(app.lastFrame()!, /Keep this message/);
+    assert.match(app.lastFrame()!, /History unavailable/);
+    assert.match(app.lastFrame()!, /Ctrl\+L dismiss alert/);
+    assert.equal(session.state.loadingHistory, false);
+  } finally {app.unmount();}
+});
