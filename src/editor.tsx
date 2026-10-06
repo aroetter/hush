@@ -1,5 +1,5 @@
 /** Let Node's readline own editing and history; Ink alone owns the terminal. */
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useLayoutEffect, useRef, useState} from 'react';
 import {createInterface, type Interface, type Key as ReadlineKey} from 'node:readline';
 import {PassThrough, Writable} from 'node:stream';
 import {Box, Text, useInput, usePaste} from 'ink';
@@ -11,7 +11,7 @@ export function Editor({value, onChange, onSubmit, disabled, secret, width, hist
 }): React.JSX.Element {
   const editor = useRef<Interface | null>(null);
   const [cursor, setCursor] = useState(value.length);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const input = new PassThrough();
     const output = new Writable({write(_chunk, _encoding, done) {done();}});
     const rl = createInterface({input, output, terminal: true, historySize: secret ? 0 : 100, history: secret ? [] : history?.current, prompt: ''});
@@ -19,7 +19,7 @@ export function Editor({value, onChange, onSubmit, disabled, secret, width, hist
     editor.current = rl;
     return () => {editor.current = null; rl.close(); input.destroy(); output.destroy();};
   }, [secret, history]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const rl = editor.current;
     if (rl && rl.line !== value) {
       // External clears and failed submissions must not enter readline's kill ring.

@@ -136,7 +136,10 @@ test('a revised patch clears the typed approval choice', async () => {
   try {
     await settle(); app.stdin.write('1'); await settle();
     rpc.event('item/fileChange/patchUpdated', {threadId: 'root', turnId: 'turn-1', itemId: 'patch', changes: [{path: 'file', diff: '+new', kind: {type: 'update'}}]});
-    await settle(); app.stdin.write('\r'); await settle();
+    app.stdin.write('\r'); // An Enter arriving before the new frame cannot approve the old choice.
+    await settle();
+    assert.equal(rpc.replies.length, 0);
+    app.stdin.write('\r'); await settle();
     assert.equal(rpc.replies.length, 0);
     assert.match(app.lastFrame()!, /\+new/);
     app.stdin.write('1'); await settle(); app.stdin.write('\r'); await settle();

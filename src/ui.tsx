@@ -44,7 +44,12 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const [selection, setSelection] = useState(0);
   const [busy, setBusy] = useState(false);
   const prompt = state.prompts[0];
-  useEffect(() => {setAnswer(''); setQuestionIndex(0); setAnswers({}); setPromptOffset(0);}, [prompt?.id, prompt?.revision]);
+  const promptKey = prompt ? `${prompt.id}:${prompt.revision}` : '';
+  const [answerPrompt, setAnswerPrompt] = useState(promptKey);
+  if (answerPrompt !== promptKey) {
+    // Reset before rendering a revised request, never after its input is enabled.
+    setAnswerPrompt(promptKey); setAnswer(''); setQuestionIndex(0); setAnswers({}); setPromptOffset(0);
+  }
   const question = prompt?.questions?.[questionIndex];
   const activity = activityStatus(state);
   const alertRows = state.alerts.length ? 1 : 0;
