@@ -7,7 +7,6 @@ import {clean} from './terminal.js';
 
 export function markdown(text: string, width: number, colors: ChalkInstance = chalk): string[] {
   width = Math.max(1, width);
-  const links: string[] = [];
   const wrap = (value: string, size: number) => wrapAnsi(value.replace(/\t/g, '    '), Math.max(1, size), {hard: true, trim: false}).split('\n');
   const inline = (tokens: Token[]): string => tokens.map(token => {
     switch (token.type) {
@@ -19,9 +18,7 @@ export function markdown(text: string, width: number, colors: ChalkInstance = ch
       case 'link': case 'image': {
         const label = inline(token.tokens ?? []) || token.text || token.href;
         if (label === token.href) return colors.underline(label);
-        let index = links.indexOf(token.href);
-        if (index < 0) {index = links.length; links.push(token.href);}
-        return colors.underline(label) + colors.gray(`[${index + 1}]`);
+        return colors.underline(label) + ' ' + colors.cyan(`(${token.href})`);
       }
       default: return 'tokens' in token && token.tokens ? inline(token.tokens) : 'text' in token ? token.text : token.raw;
     }
@@ -62,6 +59,5 @@ export function markdown(text: string, width: number, colors: ChalkInstance = ch
   });
   const result = blocks(marked.lexer(clean(text)), width);
   while (result.at(-1) === '') result.pop();
-  if (links.length) result.push('', ...links.flatMap((url, i) => wrap(colors.gray(`${i + 1}. ${url}`), width)));
   return result.map(line => colors.white(line));
 }

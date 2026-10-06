@@ -215,8 +215,8 @@ incompatible changes may require Hush code changes too.
 
 Your messages are cyan; Codex replies are white, with bold speaker labels.
 Replies render Markdown headings, emphasis, lists, quotes, code blocks, and tables.
-Long links use numbered destination notes; narrow terminals show table rows as
-labeled fields. Status lines and keyboard hints are gray. Commands, diffs, and logs
+Link destinations appear beside their labels, including within numbered steps;
+narrow terminals show table rows as labeled fields. Status lines and keyboard hints are gray. Commands, diffs, and logs
 stay in the details view.
 
 Set `NO_COLOR=1` to disable colors. User messages and approval details remain literal
