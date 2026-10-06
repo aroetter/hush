@@ -1,0 +1,40 @@
+{
+  "name": "@aroetter/hush",
+  "version": "0.1.0",
+  "description": "A quiet terminal UI for Codex app-server",
+  "type": "module",
+  "bin": {
+    "hush": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "node --import tsx src/cli.tsx",
+    "test": "node --import tsx --test test/*.test.ts test/*.test.tsx",
+    "check": "tsc --noEmit && npm test",
+    "protocol:refresh": "node scripts/protocol.mjs",
+    "smoke": "node --import tsx scripts/smoke.ts",
+    "prepack": "npm run build",
+    "test:terminal": "python3 scripts/terminal-smoke.py"
+  },
+  "dependencies": {
+    "ink": "^8.0.0",
+    "react": "^19.3.0",
+    "smol-toml": "^1.9.0",
+    "wrap-ansi": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "ink-testing-library": "^4.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
