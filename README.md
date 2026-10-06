@@ -188,6 +188,17 @@ under `src/protocol/`. It does not upgrade Codex. Review those changes and keep 
 checks passing before accepting the new protocol version. App-server is experimental;
 incompatible changes may require Hush code changes too.
 
+## Conversation formatting
+
+Your messages are cyan; Codex replies are white, with bold speaker labels.
+Replies render Markdown headings, emphasis, lists, quotes, code blocks, and tables.
+Long links use numbered destination notes; narrow terminals show table rows as
+labeled fields. Status lines and keyboard hints are gray. Commands, diffs, and logs
+stay in the details view.
+
+Set `NO_COLOR=1` to disable colors. User messages and approval details remain literal
+text. Code blocks have no syntax highlighting.
+
 ## Troubleshooting
 
 - **`hush` is not found:** run `npm run build` and `npm link` from this checkout.

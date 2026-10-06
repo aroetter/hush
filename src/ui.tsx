@@ -1,7 +1,7 @@
 /** Render a bounded terminal screen with independent conversation and details scrolling. */
 import React, {useEffect, useReducer, useState} from 'react';
 import {Box, Text, useInput, usePaste, useWindowSize} from 'ink';
-import {clean, lines, conversation, details, counts} from './view.js';
+import {clean, lines, conversationLines, details, counts} from './view.js';
 import type {Session} from './session.js';
 
 /** Keep the draft editable during streaming, and submit only on an explicit Enter. */
@@ -42,7 +42,7 @@ function Editor({value, onChange, onSubmit, disabled, secret, width}: {
   const shown = secret ? '•'.repeat(value.length) : value;
   const rendered = lines(`> ${shown.slice(0, at)}${disabled ? '' : '▏'}${shown.slice(at)}`, width);
   const cursorLine = lines(`> ${shown.slice(0, at)}`, width).length - 1;
-  return <Box height={3} flexDirection="column"><Text>{rendered.slice(Math.max(0, cursorLine - 2), Math.max(0, cursorLine - 2) + 3).join('\n')}</Text></Box>;
+  return <Box height={3} flexDirection="column"><Text color="cyan">{rendered.slice(Math.max(0, cursorLine - 2), Math.max(0, cursorLine - 2) + 3).join('\n')}</Text></Box>;
 }
 
 /** A viewport offset is a line index, or null to follow the latest output. */
@@ -78,7 +78,8 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const space = Math.max(2, height - 1 - activityRows - alertRows - 1 - 3 - 1);
   const lowerHeight = prompt || expanded ? Math.max(1, Math.floor(space / 2)) : 0;
   const chatHeight = space - lowerHeight;
-  const chat = lines(conversation(state) || (state.phase === 'connecting' ? 'Connecting to Codex…' : 'Send a message to begin.'), width);
+  const formatted = conversationLines(state, width);
+  const chat = formatted.length ? formatted : lines(state.phase === 'connecting' ? 'Connecting to Codex…' : 'Send a message to begin.', width);
   const technical = expanded && !prompt ? lines(details(state) || 'No details yet.', width) : [];
   const promptText = prompt ? [prompt.title, prompt.body,
     question ? `Question ${questionIndex + 1}/${prompt.questions!.length}: ${question.question}` : '',
@@ -158,24 +159,24 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const heading = clean(`hush · ${session.options.cwd} · ${state.model ?? version}${state.threadId ? ' · ' + state.threadId : ''}`);
   if (columns < 35 || rows < 16) return <Box flexDirection="column"><Text>Enlarge terminal to at least 35×16.</Text><Text>Ctrl+C stops work · Ctrl+D exits</Text></Box>;
   return <Box flexDirection="column" height={height} width={width}>
-    <Text bold wrap="truncate-end">{heading}</Text>
+    <Text color="gray" bold wrap="truncate-end">{heading}</Text>
     {state.phase === 'picking' ? <Box height={chatHeight} flexDirection="column">
       <Text bold>Resume session · ↑/↓ select · Enter open · n more</Text>
       {!state.sessions.length && <Text>No sessions here. Use hush resume --all, or hush to start.</Text>}
       {state.sessions.slice(Math.max(0, selection - chatHeight + 3), Math.max(0, selection - chatHeight + 3) + chatHeight - 1).map(thread =>
-        <Text key={thread.id} wrap="truncate-end" color={state.sessions[selection]?.id === thread.id ? 'cyan' : undefined}>
+        <Text key={thread.id} wrap="truncate-end" color={state.sessions[selection]?.id === thread.id ? 'cyan' : 'white'}>
           {state.sessions[selection]?.id === thread.id ? '› ' : '  '}{clean(thread.name ?? thread.preview ?? thread.id)} · {new Date(thread.updatedAt * 1000).toLocaleString()}{session.options.all ? ` · ${clean(thread.cwd)}` : ''}
         </Text>)}
-    </Box> : <Box height={chatHeight} overflow="hidden"><Text>{viewport(chat, chatHeight, chatOffset)}</Text></Box>}
+    </Box> : <Box height={chatHeight} overflow="hidden"><Text color="white">{viewport(chat, chatHeight, chatOffset)}</Text></Box>}
     {lowerHeight > 0 && <Box height={lowerHeight} flexDirection="column" overflow="hidden">
       <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · PgUp/PgDn scroll` : `Details · ${focusDetails ? 'scrolling here' : 'Tab to scroll here'} · Ctrl+O close`}</Text>
-      <Text>{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
+      <Text color="white">{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
     </Box>}
-    {activities.slice(0, activityRows).map((activity, i) => <Text key={i} dimColor wrap="truncate-end">{clean(activity.name)} · {clean(activity.text).replace(/\n/g, ' ')}</Text>)}
-    {state.alerts.length > 0 && <Box height={2} flexDirection="column"><Text color="yellow" wrap="truncate-end">{clean(state.alerts.at(-1)!)}</Text><Text dimColor>{state.alerts.length} notice(s) · details contain full text · Ctrl+L dismiss</Text></Box>}
-    <Text dimColor wrap="truncate-end">{expanded ? '▾' : '▸'} Details · {counts(state)}{activities.length > 3 ? ` · ${activities.length - 3} more agents in details` : ''}{state.historyCursor ? ' · Ctrl+B older messages' : ''}</Text>
+    {activities.slice(0, activityRows).map((activity, i) => <Text key={i} color="gray" wrap="truncate-end">{clean(activity.name)} · {clean(activity.text).replace(/\n/g, ' ')}</Text>)}
+    {state.alerts.length > 0 && <Box height={2} flexDirection="column"><Text color="yellow" wrap="truncate-end">{clean(state.alerts.at(-1)!)}</Text><Text color="gray">{state.alerts.length} notice(s) · details contain full text · Ctrl+L dismiss</Text></Box>}
+    <Text color="gray" wrap="truncate-end">{expanded ? '▾' : '▸'} Details · {counts(state)}{activities.length > 3 ? ` · ${activities.length - 3} more agents in details` : ''}{state.historyCursor ? ' · Ctrl+B older messages' : ''}</Text>
     <Editor key={prompt ? `prompt:${prompt.id}:${prompt.revision}:${questionIndex}` : 'draft'} value={prompt ? answer : draft} onChange={prompt ? setAnswer : setDraft}
       onSubmit={submit} disabled={state.phase !== 'ready' || state.sending || state.interrupting || busy} secret={question?.isSecret ?? false} width={width}/>
-    <Text dimColor wrap="truncate-end">{state.phase === 'disconnected' ? 'Disconnected · restart Hush to resume · Ctrl+D exit' : state.interrupting ? 'Interrupting…' : 'Enter send · Ctrl+O details · PgUp/PgDn scroll · Ctrl+C stop · Ctrl+D exit'}</Text>
+    <Text color="gray" wrap="truncate-end">{state.phase === 'disconnected' ? 'Disconnected · restart Hush to resume · Ctrl+D exit' : state.interrupting ? 'Interrupting…' : 'Enter send · Ctrl+O details · PgUp/PgDn scroll · Ctrl+C stop · Ctrl+D exit'}</Text>
   </Box>;
 }
