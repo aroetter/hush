@@ -11,11 +11,12 @@ import type {JsonValue} from './protocol/serde_json/JsonValue.js';
 import {makePrompt, type Prompt} from './approvals.js';
 
 export interface Item {threadId: string; turnId: string; value: ThreadItem; complete: boolean}
-export interface Activity {name: string; text: string}
+export interface Activity {name: string; text: string; running: boolean}
 export interface State {
   phase: 'connecting' | 'picking' | 'ready' | 'disconnected';
   threadId?: string;
   model?: string;
+  name?: string;
   activeTurn?: string;
   sending: boolean;
   interrupting: boolean;
@@ -129,7 +130,8 @@ export class Session extends EventEmitter {
       this.ensureConnected();
       this.state.threadId = response.thread.id;
       this.state.model = response.model;
-      this.state.activities.set(response.thread.id, {name: 'Codex', text: 'Ready'});
+      this.state.name = response.thread.name ?? undefined;
+      this.state.activities.set(response.thread.id, {name: 'Codex', text: 'Ready', running: false});
       if (id) await this.loadHistory();
       for (const turn of response.thread.turns ?? []) this.hydrateTurn(turn);
       this.ensureConnected();
@@ -197,7 +199,7 @@ export class Session extends EventEmitter {
     for (const item of turn.items) this.upsert(this.state.threadId!, turn.id, item, turn.status !== 'inProgress', true);
     if (turn.status === 'inProgress') this.state.activeTurn = turn.id;
     else this.completedTurns.add(turn.id);
-    if (turn.error) this.alert(turn.error.message);
+    if (turn.error) this.detail(`Historical turn ${turn.id}`, turn.error.message);
   }
 
   private upsert(threadId: string, turnId: string, value: ThreadItem, complete: boolean, history = false): void {
@@ -219,7 +221,8 @@ export class Session extends EventEmitter {
         return updated.body === prompt.body ? prompt : {...updated, revision: prompt.revision + 1};
       });
     }
-    if (!history) this.activity(item);
+    if (history) return;
+    this.activity(item);
     if (value.type === 'commandExecution' && complete && (value.exitCode || value.status === 'failed')) this.alert(`Command failed (exit ${value.exitCode ?? 'unknown'}). See details.`);
     if (value.type === 'fileChange' && value.status === 'failed') this.alert('File change failed. See details.');
     if (value.type === 'mcpToolCall' && value.error) this.alert(`Tool ${value.tool}: ${value.error.message}`);
@@ -243,27 +246,31 @@ export class Session extends EventEmitter {
     if (v.type === 'collabAgentToolCall') {
       text = 'Coordinating agents';
       for (const [id, agent] of Object.entries(v.agentsStates ?? {})) if (agent) {
-        this.state.activities.set(id, {name: this.state.activities.get(id)?.name ?? `Agent ${id.slice(0, 8)}`, text: agent.status});
+        this.state.activities.set(id, {name: this.state.activities.get(id)?.name ?? `Agent ${id.slice(0, 8)}`, text: agent.status, running: agent.status === 'running' || agent.status === 'pendingInit'});
         if (agent.message) this.detail(`Agent ${id}`, agent.message);
         if (agent.status === 'errored') this.alert(`Agent ${id.slice(0, 8)} failed. See details.`);
       }
     }
-    if (v.type === 'subAgentActivity') this.state.activities.set(v.agentThreadId, {name: v.agentPath, text: v.kind});
-    if (text) this.state.activities.set(item.threadId, {name: old?.name ?? `Agent ${item.threadId.slice(0, 8)}`, text});
+    if (v.type === 'subAgentActivity') this.state.activities.set(v.agentThreadId, {name: v.agentPath, text: v.kind, running: v.kind === 'started' || v.kind === 'interacted'});
+    if (text) this.state.activities.set(item.threadId, {name: old?.name ?? `Agent ${item.threadId.slice(0, 8)}`, text, running: true});
   }
 
   private notification(event: ServerMessage): void {
     const {method, params: p} = event;
     if (method === 'thread/started') {
       const t = p.thread;
-      if (t?.parentThreadId) this.state.activities.set(t.id, {name: t.agentNickname ?? t.agentRole ?? `Agent ${t.id.slice(0, 8)}`, text: t.status?.type ?? 'Starting'});
+      if (t?.parentThreadId) this.state.activities.set(t.id, {name: t.agentNickname ?? t.agentRole ?? `Agent ${t.id.slice(0, 8)}`, text: t.status?.type ?? 'Starting', running: t.status?.type === 'active'});
     } else if (method === 'thread/status/changed') {
       const old = this.state.activities.get(p.threadId);
-      this.state.activities.set(p.threadId, {name: old?.name ?? 'Codex', text: p.status.activeFlags?.join(', ') || p.status.type});
+      this.state.activities.set(p.threadId, {name: old?.name ?? 'Codex', text: p.status.activeFlags?.join(', ') || p.status.type, running: p.status.type === 'active' && !p.status.activeFlags?.length});
       if (p.status.type === 'systemError') this.alert('Codex reported a session error. See details.');
+    } else if (method === 'thread/name/updated') {
+      if (p.threadId === this.state.threadId) this.state.name = p.threadName ?? undefined;
+      this.state.sessions = this.state.sessions.map(thread => thread.id === p.threadId ? {...thread, name: p.threadName} : thread);
     } else if (method === 'thread/settings/updated' && p.threadId === this.state.threadId) {
       this.state.model = p.threadSettings?.model ?? this.state.model;
     } else if (method === 'turn/started') {
+      this.state.activities.set(p.threadId, {name: this.state.activities.get(p.threadId)?.name ?? 'Codex', text: 'Working', running: true});
       if (p.threadId === this.state.threadId) {
         this.state.activeTurn = p.turn.id;
         this.state.interrupting = false;
@@ -277,7 +284,7 @@ export class Session extends EventEmitter {
         this.interruptPending = false;
       }
       this.state.prompts = this.state.prompts.filter(prompt => !(prompt.threadId === p.threadId && prompt.turnId === p.turn.id));
-      this.state.activities.set(p.threadId, {name: this.state.activities.get(p.threadId)?.name ?? 'Codex', text: p.turn.status === 'completed' ? 'Ready' : p.turn.status});
+      this.state.activities.set(p.threadId, {name: this.state.activities.get(p.threadId)?.name ?? 'Codex', text: p.turn.status === 'completed' ? 'Ready' : p.turn.status, running: false});
       if (p.turn.error || p.turn.status === 'failed') this.alert(p.turn.error?.message ?? 'Turn failed.');
       if (p.turn.status === 'interrupted') this.alert('Turn interrupted. You can send another message.');
     } else if (method === 'item/started' || method === 'item/completed') {
@@ -302,8 +309,12 @@ export class Session extends EventEmitter {
     } else if (method === 'error') {
       this.alert(`${p.willRetry ? 'Codex is retrying: ' : ''}${p.error?.message ?? JSON.stringify(p)}`);
     } else if (['warning', 'configWarning', 'guardianWarning', 'deprecationNotice', 'thread/realtime/error'].includes(method)) {
-      this.alert(p.message ?? p.summary ?? JSON.stringify(p));
-      this.detail(method, JSON.stringify(p, null, 2));
+      const message = p.message ?? p.summary ?? JSON.stringify(p);
+      // This protocol version provides these informational approvals as warning text.
+      const approved = (method === 'guardianWarning' || method === 'warning')
+        && /^Automatic approval review approved \(risk: [^)]+\):/.test(message);
+      if (approved) this.detail(`Approval ${this.state.details.size}`, message);
+      else {this.alert(message); this.detail(method, JSON.stringify(p, null, 2));}
     } else if (method === 'model/rerouted') {
       this.alert(`Model changed: ${p.toModel ?? JSON.stringify(p)}`);
       if (p.toModel) this.state.model = p.toModel;
@@ -331,6 +342,18 @@ export class Session extends EventEmitter {
     if (!this.state.prompts.some(prompt => prompt.id === id && prompt.revision === revision)) return;
     this.rpc.respond(id, result);
     this.state.prompts = this.state.prompts.filter(prompt => prompt.id !== id);
+    this.changed();
+  }
+
+  async rename(name: string): Promise<void> {
+    const value = name.trim();
+    if (!value) throw new Error('Usage: /rename My session name');
+    if (this.state.phase !== 'ready' || !this.state.threadId) throw new Error('Open a session before renaming it.');
+    const threadId = this.state.threadId;
+    await this.rpc.request('thread/name/set', {threadId, name: value});
+    this.ensureConnected();
+    if (this.state.threadId === threadId) this.state.name = value;
+    this.state.sessions = this.state.sessions.map(thread => thread.id === threadId ? {...thread, name: value} : thread);
     this.changed();
   }
 

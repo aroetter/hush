@@ -45,6 +45,17 @@ function Editor({value, onChange, onSubmit, disabled, secret, width}: {
   return <Box height={3} flexDirection="column"><Text color="cyan">{rendered.slice(Math.max(0, cursorLine - 2), Math.max(0, cursorLine - 2) + 3).join('\n')}</Text></Box>;
 }
 
+/** Animate only this small row, without reformatting conversation or details on each tick. */
+function ActivityRow({name, text, running, waiting}: {name: string; text: string; running: boolean; waiting: boolean}): React.JSX.Element {
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const timer = setInterval(() => setFrame(n => (n + 1) % 4), 120);
+    return () => clearInterval(timer);
+  }, [running]);
+  return <Text color="gray" wrap="truncate-end"><Text color={waiting ? 'yellow' : running ? 'cyan' : 'gray'}>{waiting ? '?' : running ? ['|', '/', '-', '\\'][frame] : '·'}</Text> {clean(name)} · {waiting ? 'Waiting for your input' : clean(text).replace(/\n/g, ' ')}</Text>;
+}
+
 /** A viewport offset is a line index, or null to follow the latest output. */
 function viewport(content: string[], height: number, offset: number | null): string {
   const start = offset === null ? Math.max(0, content.length - height) : Math.min(offset, Math.max(0, content.length - height));
@@ -72,7 +83,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const prompt = state.prompts[0];
   useEffect(() => {setAnswer(''); setQuestionIndex(0); setAnswers({}); setPromptOffset(0);}, [prompt?.id, prompt?.revision]);
   const question = prompt?.questions?.[questionIndex];
-  const activities = [...state.activities.values()];
+  const activities = [...state.activities.entries()];
   const activityRows = Math.min(3, activities.length);
   const alertRows = state.alerts.length ? 2 : 0;
   const space = Math.max(2, height - 1 - activityRows - alertRows - 1 - 3 - 1);
@@ -155,9 +166,10 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const submit = (value: string) => {
     if (prompt) submitPrompt(value);
     else if (['exit', '/exit'].includes(value.trim())) onExit();
+    else if (/^\/rename(?:\s|$)/.test(value.trim())) void safeRun(async () => {await session.rename(value.trim().slice(7)); setDraft('');});
     else void session.send(value).then(sent => {if (sent) setDraft('');});
   };
-  const heading = clean(`hush · ${session.options.cwd} · ${state.model ?? version}${state.threadId ? ' · ' + state.threadId : ''}`);
+  const heading = clean(`hush · ${session.options.cwd} · ${state.model ?? version}${state.threadId ? ' · ' + (state.name ?? state.threadId) : ''}`);
   if (columns < 35 || rows < 16) return <Box flexDirection="column"><Text>Enlarge terminal to at least 35×16.</Text><Text>Ctrl+C stops work · Ctrl+D exits</Text></Box>;
   return <Box flexDirection="column" height={height} width={width}>
     <Text color="gray" bold wrap="truncate-end">{heading}</Text>
@@ -173,7 +185,16 @@ export function App({session, version, onExit}: {session: Session; version: stri
       <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · PgUp/PgDn scroll` : `Details · ${focusDetails ? 'scrolling here' : 'Tab to scroll here'} · Ctrl+O close`}</Text>
       <Text color="white">{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
     </Box>}
-    {activities.slice(0, activityRows).map((activity, i) => <Text key={i} color="gray" wrap="truncate-end">{clean(activity.name)} · {clean(activity.text).replace(/\n/g, ' ')}</Text>)}
+    {activities.slice(0, activityRows).map(([id, activity]) => {
+      const waiting = state.prompts.some(request => request.threadId === id);
+      const running = state.phase === 'ready' && !waiting && (id === state.threadId
+        ? !!(state.activeTurn || state.sending || state.interrupting) : activity.running);
+      const text = id === state.threadId && state.sending && !state.activeTurn ? 'Starting…'
+        : id === state.threadId && state.interrupting ? 'Interrupting…'
+        : state.phase === 'disconnected' ? 'Disconnected'
+        : running && activity.text === 'Ready' ? 'Working' : activity.text;
+      return <ActivityRow key={id} name={activity.name} text={text} running={running} waiting={waiting}/>;
+    })}
     {state.alerts.length > 0 && <Box height={2} flexDirection="column"><Text color="yellow" wrap="truncate-end">{clean(state.alerts.at(-1)!)}</Text><Text color="gray">{state.alerts.length} notice(s) · details contain full text · Ctrl+L dismiss</Text></Box>}
     <Text color="gray" wrap="truncate-end">{expanded ? '▾' : '▸'} Details · {counts(state)}{activities.length > 3 ? ` · ${activities.length - 3} more agents in details` : ''}{state.historyCursor ? ' · Ctrl+B older messages' : ''}</Text>
     <Editor key={prompt ? `prompt:${prompt.id}:${prompt.revision}:${questionIndex}` : 'draft'} value={prompt ? answer : draft} onChange={prompt ? setAnswer : setDraft}

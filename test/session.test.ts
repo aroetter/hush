@@ -254,3 +254,40 @@ test('a changed pending patch requires a fresh decision for the new revision', a
   session.respond(after.id, after.choices[0]!.result, after.revision);
   assert.deepEqual(rpc.replies, [{id: 1, result: {decision: 'accept'}}]);
 });
+
+test('routine approval notices stay in details while denied and unknown warnings stay visible', async () => {
+  const {rpc, session} = await ready();
+  for (const method of ['guardianWarning', 'warning']) {
+    rpc.event(method, {threadId: 'root', message: 'Automatic approval review approved (risk: low, authorization: high): Run checks.'});
+  }
+  assert.deepEqual(session.state.alerts, []);
+  assert.match(details(session.state), /Automatic approval review approved/);
+  rpc.event('guardianWarning', {threadId: 'root', message: 'Automatic approval review denied: permission required.'});
+  rpc.event('warning', {message: 'Something unexpected'});
+  assert.equal(session.state.alerts.length, 2);
+  assert.match(session.state.alerts[0]!, /denied/);
+});
+
+test('historical failures remain in details without new failure banners', async () => {
+  const {rpc, session} = await ready();
+  rpc.handler = async method => method === 'thread/turns/list' ? {data: [{id: 'old', status: 'failed', itemsView: 'full', error: {message: 'Old turn failed'}, items: [
+    {type: 'commandExecution', id: 'old-command', command: 'false', cwd: '/project', status: 'completed', exitCode: 1, aggregatedOutput: 'Old command output'},
+  ]}], nextCursor: null} : {};
+  await session.loadHistory();
+  assert.deepEqual(session.state.alerts, []);
+  assert.match(details(session.state), /Old command output/);
+  assert.match(details(session.state), /Old turn failed/);
+  item(rpc, {type: 'commandExecution', id: 'new-command', command: 'false', cwd: '/project', status: 'completed', exitCode: 1});
+  assert.match(session.state.alerts.join(' '), /Command failed/);
+});
+
+test('rename validates names and tracks external name updates', async () => {
+  const {rpc, session} = await ready();
+  const count = rpc.calls.length;
+  await assert.rejects(session.rename('  '), /Usage: \/rename/);
+  assert.equal(rpc.calls.length, count);
+  await session.rename('  Named session  ');
+  assert.equal(session.state.name, 'Named session');
+  rpc.event('thread/name/updated', {threadId: 'root', threadName: 'Renamed elsewhere'});
+  assert.equal(session.state.name, 'Renamed elsewhere');
+});

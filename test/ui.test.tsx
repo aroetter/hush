@@ -205,3 +205,72 @@ test('exit remains a literal answer to a pending question', async () => {
     assert.deepEqual(rpc.replies[0]?.result, {answers: {word: {answers: ['exit']}}});
   } finally {app.unmount();}
 });
+
+test('activity animates without reformatting chat, then stops for input and completion', async () => {
+  const {rpc, session} = await ready();
+  let reads = 0;
+  item(rpc, {...agent('answer', ''), get text() {reads++; return 'Stable conversation';}});
+  rpc.event('turn/started', {threadId: 'root', turn: {id: 'busy'}});
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    const before = reads;
+    const start = app.frames.length;
+    await delay(300);
+    const markers = new Set(app.frames.slice(start).map(frame => frame.match(/([|/\\-]) Codex · Working/)?.[1]).filter(Boolean));
+    assert.ok(markers.size >= 2, 'working indicator must advance');
+    assert.equal(reads, before, 'animation must not reformat conversation');
+    rpc.ask(90, 'item/commandExecution/requestApproval', {threadId: 'root', turnId: 'busy', command: 'test', availableDecisions: ['accept', 'decline']});
+    await settle();
+    assert.match(app.lastFrame()!, /\? Codex · Waiting for your input/);
+    const waiting = app.lastFrame();
+    await delay(260);
+    assert.equal(app.lastFrame(), waiting);
+    session.respond(90, {decision: 'decline'});
+    rpc.event('turn/completed', {threadId: 'root', turn: {id: 'busy', status: 'completed'}});
+    await settle();
+    assert.match(app.lastFrame()!, /· Codex · Ready/);
+    const idle = app.lastFrame();
+    await delay(260);
+    assert.equal(app.lastFrame(), idle);
+  } finally {app.unmount();}
+});
+
+test('subagent indicators stop on completion and disconnect', async () => {
+  const {rpc, session} = await ready();
+  item(rpc, {type: 'subAgentActivity', id: 'child-start', agentThreadId: 'child', agentPath: '/root/check', kind: 'started'});
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    assert.match(app.lastFrame()!, /[|/\\-] \/root\/check · started/);
+    item(rpc, {type: 'subAgentActivity', id: 'child-end', agentThreadId: 'child', agentPath: '/root/check', kind: 'completed'});
+    await settle();
+    assert.match(app.lastFrame()!, /· \/root\/check · completed/);
+    rpc.emit('fault', new Error('Connection lost'));
+    await settle();
+    assert.match(app.lastFrame()!, /· Codex · Disconnected/);
+    const frame = app.lastFrame();
+    await delay(260);
+    assert.equal(app.lastFrame(), frame);
+  } finally {app.unmount();}
+});
+
+test('/rename saves a session name without sending a model message', async () => {
+  const {rpc, session} = await ready();
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    app.stdin.write('/rename Willis browser QA'); await settle();
+    app.stdin.write('\r'); await settle();
+    assert.deepEqual(rpc.calls.at(-1), {method: 'thread/name/set', params: {threadId: 'root', name: 'Willis browser QA'}});
+    assert.equal(rpc.calls.some(call => call.method === 'turn/start'), false);
+    assert.match(app.lastFrame()!, /hush · \/project · test-model · Willis browser QA/);
+    const handler = rpc.handler;
+    rpc.handler = async (method, params) => {if (method === 'thread/name/set') throw new Error('Rename failed'); return handler(method, params);};
+    app.stdin.write('/rename Another name'); await settle();
+    app.stdin.write('\r'); await settle();
+    assert.match(app.lastFrame()!, /Rename failed/);
+    assert.match(app.lastFrame()!, /\/rename Another name/);
+    assert.equal(session.state.name, 'Willis browser QA');
+  } finally {app.unmount();}
+});
