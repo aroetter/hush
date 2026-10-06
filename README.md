@@ -228,3 +228,7 @@ Live diagnostics retain the last 200,000 characters per entry and 500 entries; o
 truncation is labeled. Codex keeps its own durable history.
 
 See [the design](docs/design.md) for the implementation boundaries and test coverage.
+
+## License
+
+[MIT](LICENSE) © 2026 Alex Roetter.
