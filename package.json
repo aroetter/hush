@@ -22,7 +22,8 @@
     "protocol:refresh": "node scripts/protocol.mjs",
     "smoke": "node --import tsx scripts/smoke.ts",
     "prepack": "npm run build",
-    "test:terminal": "python3 scripts/terminal-smoke.py"
+    "test:terminal": "python3 scripts/terminal-smoke.py",
+    "test:all": "npm run check && npm run build && npm run test:terminal && npm run smoke"
   },
   "dependencies": {
     "ink": "^8.0.0",
