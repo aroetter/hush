@@ -109,7 +109,9 @@ The name is saved by Codex and appears in Hush's header and resume picker.
 Renaming does not send a message to the model. During an approval or question,
 text answers that prompt; finish the prompt before using `/rename`.
 
-Recent conversation history loads first; **Ctrl+B** loads older messages.
+Recent conversation history loads first. Scroll up with **Page Up**; reaching the
+oldest loaded messages automatically fetches earlier history while keeping your
+reading position steady. Continue scrolling up to read it.
 
 **The launch directory is always the working directory**, including when resuming
 a session originally created elsewhere. The header shows it. There is no `-C` flag:
@@ -145,20 +147,40 @@ in Details instead of appearing as new errors.
 
 ## Keyboard
 
+The bottom line shows complete shortcut hints that fit the terminal width, with
+context-specific controls prioritized over standard editing and exit keys. Details
+keeps its Ctrl+O hint beside the toggle.
+
+Input editing uses Node's built-in [readline library](https://nodejs.org/api/readline.html#tty-keybindings),
+with Emacs-style keys. There is no vi mode. Alt is the terminal's Meta key; on macOS,
+you may need to enable Option as Meta. A multiline message is one readline input,
+so start/end and cut-to-start/end apply to the whole message. Input history stays
+in memory for this run; approval answers use separate editors and secret answers
+are never added to history. Hush reserves Ctrl+C/D/O/L for its application commands.
+
 The conversation and details have separate scroll positions. Pending requests take
-priority when you use the scroll keys.
+priority when you use the scroll keys. Scrolling Details or an approval prompt does
+not load conversation history.
 
 | Key | Action |
 | --- | --- |
 | Enter | Send a message, steer active work, or submit a prompt response |
 | Alt+Enter | Insert a newline; multiline paste also works |
-| Left / Right / Home / End | Move within the draft |
+| Left / Right / Home / End | Move within the message being typed |
 | Backspace / Delete | Delete before / after the cursor |
-| Ctrl+U | Clear the current input |
+| Ctrl+A / Ctrl+E | Move to the start / end of the message being typed |
+| Ctrl+B / Ctrl+F | Move backward / forward one character |
+| Alt+B / Alt+F | Move backward / forward one word |
+| Ctrl+K / Ctrl+U | Cut from the cursor to the end / start of the input |
+| Ctrl+Y / Alt+Y | Yank cut text / cycle through previous cuts |
+| Ctrl+W / Alt+Backspace | Delete the previous word |
+| Alt+D | Delete the next word |
+| Ctrl+H | Delete the previous character |
+| Ctrl+P / Ctrl+N | Recall previous / next input from this Hush run |
+| Ctrl+_ / Ctrl+^ | Undo / redo (terminal key mappings vary) |
 | Ctrl+O | Expand or collapse details |
 | Tab | Switch scrolling between conversation and expanded details |
-| Page Up / Page Down | Scroll the selected panel |
-| Ctrl+B | Load older conversation history |
+| Page Up / Page Down | Scroll the selected panel; scrolling to the top of conversation loads earlier history |
 | Ctrl+C | Interrupt active work; otherwise clear input; cancel startup if connecting |
 | Ctrl+L | Dismiss notices; their full text stays in details |
 | Ctrl+D | Exit and stop this Hush app-server |

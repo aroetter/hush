@@ -1,49 +1,9 @@
 /** Render a bounded terminal screen with independent conversation and details scrolling. */
-import React, {useEffect, useReducer, useState} from 'react';
-import {Box, Text, useInput, usePaste, useWindowSize} from 'ink';
-import {clean, lines, conversationLines, details, activityStatus} from './view.js';
+import React, {useEffect, useReducer, useRef, useState} from 'react';
+import {Box, Text, useInput, useWindowSize} from 'ink';
+import {clean, lines, conversationLines, details, activityStatus, shortcutHints} from './view.js';
+import {Editor} from './editor.js';
 import type {Session} from './session.js';
-
-/** Keep the draft editable during streaming, and submit only on an explicit Enter. */
-function Editor({value, onChange, onSubmit, disabled, secret, width}: {
-  value: string; onChange: (text: string) => void; onSubmit: (text: string) => void;
-  disabled: boolean; secret: boolean; width: number;
-}): React.JSX.Element {
-  const [cursor, setCursor] = useState(value.length);
-  const at = Math.min(cursor, value.length);
-  const insert = (text: string) => {
-    const safe = clean(text);
-    onChange(value.slice(0, at) + safe + value.slice(at));
-    setCursor(at + safe.length);
-  };
-  usePaste(insert, {isActive: !disabled});
-  useInput((input, key) => {
-    if (key.ctrl && input === 'u') {onChange(''); setCursor(0); return;}
-    if (key.ctrl || key.tab || key.escape || key.pageUp || key.pageDown || key.upArrow || key.downArrow) return;
-    if (key.return) {
-      if (key.meta || key.shift) insert('\n');
-      else if (value.trim()) onSubmit(value);
-      return;
-    }
-    if (key.leftArrow) {setCursor(at - (Array.from(value.slice(0, at)).at(-1)?.length ?? 0)); return;}
-    if (key.rightArrow) {setCursor(at + (Array.from(value.slice(at))[0]?.length ?? 0)); return;}
-    if (key.home) {setCursor(0); return;}
-    if (key.end) {setCursor(value.length); return;}
-    if (key.delete) {
-      const size = Array.from(value.slice(at))[0]?.length ?? 0;
-      onChange(value.slice(0, at) + value.slice(at + size)); return;
-    }
-    if (key.backspace) {
-      const size = Array.from(value.slice(0, at)).at(-1)?.length ?? 0;
-      onChange(value.slice(0, at - size) + value.slice(at)); setCursor(at - size); return;
-    }
-    if (!key.meta) insert(input);
-  }, {isActive: !disabled});
-  const shown = secret ? '•'.repeat(value.length) : value;
-  const rendered = lines(`> ${shown.slice(0, at)}${disabled ? '' : '▏'}${shown.slice(at)}`, width);
-  const cursorLine = lines(`> ${shown.slice(0, at)}`, width).length - 1;
-  return <Box height={3} flexDirection="column"><Text color="cyan">{rendered.slice(Math.max(0, cursorLine - 2), Math.max(0, cursorLine - 2) + 3).join('\n')}</Text></Box>;
-}
 
 /** Animate only this small row, without reformatting conversation or details on each tick. */
 function ActivityRow({name, text, running, waiting}: {name: string; text: string; running: boolean; waiting: boolean}): React.JSX.Element {
@@ -58,7 +18,7 @@ function ActivityRow({name, text, running, waiting}: {name: string; text: string
 
 /** A viewport offset is a line index, or null to follow the latest output. */
 function viewport(content: string[], height: number, offset: number | null): string {
-  const start = offset === null ? Math.max(0, content.length - height) : Math.min(offset, Math.max(0, content.length - height));
+  const start = offset === null ? Math.max(0, content.length - height) : Math.min(offset, Math.max(0, content.length - 1));
   return content.slice(start, start + height).join('\n');
 }
 
@@ -68,6 +28,9 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const {columns, rows} = useWindowSize();
   const width = Math.max(10, columns - 1);
   const height = Math.max(10, rows - 1);
+  const inputHistory = useRef<string[]>([]);
+  const latestWidth = useRef(width);
+  latestWidth.current = width;
   const state = session.state;
   const [expanded, setExpanded] = useState(false);
   const [focusDetails, setFocusDetails] = useState(false);
@@ -81,7 +44,12 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const [selection, setSelection] = useState(0);
   const [busy, setBusy] = useState(false);
   const prompt = state.prompts[0];
-  useEffect(() => {setAnswer(''); setQuestionIndex(0); setAnswers({}); setPromptOffset(0);}, [prompt?.id, prompt?.revision]);
+  const promptKey = prompt ? `${prompt.id}:${prompt.revision}` : '';
+  const [answerPrompt, setAnswerPrompt] = useState(promptKey);
+  if (answerPrompt !== promptKey) {
+    // Reset before rendering a revised request, never after its input is enabled.
+    setAnswerPrompt(promptKey); setAnswer(''); setQuestionIndex(0); setAnswers({}); setPromptOffset(0);
+  }
   const question = prompt?.questions?.[questionIndex];
   const activity = activityStatus(state);
   const alertRows = state.alerts.length ? 1 : 0;
@@ -103,6 +71,20 @@ export function App({session, version, onExit}: {session: Session; version: stri
     setBusy(true);
     try {await action();} catch (error) {session.alert((error as Error).message);} finally {setBusy(false);}
   };
+  const loadOlder = async () => {
+    if (!state.historyCursor || state.loadingHistory || state.phase !== 'ready') return;
+    const previousItems = new Set(state.items);
+    const threadId = state.threadId;
+    try {
+      await session.loadHistory();
+      if (state.threadId !== threadId) return;
+      const firstExisting = state.items.findIndex(item => previousItems.has(item));
+      const prefix = conversationLines({...state, items: state.items.slice(0, Math.max(0, firstExisting))}, latestWidth.current);
+      const added = prefix.length ? prefix.length + 1 : 0;
+      // Keep the same message in view when older messages are inserted above it.
+      setChatOffset(offset => offset === null ? null : offset + added);
+    } catch (error) {session.alert((error as Error).message);}
+  };
   const scroll = (direction: number) => {
     const lower = !!prompt || (expanded && focusDetails);
     const data = prompt ? promptLines : lower ? technical : chat;
@@ -114,7 +96,11 @@ export function App({session, version, onExit}: {session: Session; version: stri
     };
     if (prompt) setPromptOffset(update);
     else if (lower) setDetailOffset(update);
-    else setChatOffset(update);
+    else {
+      const next = update(chatOffset);
+      setChatOffset(direction < 0 && next === null ? 0 : next);
+      if (direction < 0 && (next === 0 || next === null)) void loadOlder();
+    }
   };
   useInput((input, key) => {
     if (key.ctrl && input === 'd') {onExit(); return;}
@@ -129,10 +115,6 @@ export function App({session, version, onExit}: {session: Session; version: stri
     if (key.tab && expanded && !prompt) setFocusDetails(!focusDetails);
     if (key.pageUp) scroll(-1);
     if (key.pageDown) scroll(1);
-    if (key.ctrl && input === 'b' && state.historyCursor) {
-      void safeRun(() => session.loadHistory());
-      setChatOffset(0);
-    }
     if (state.phase === 'picking' && !busy) {
       if (key.upArrow) setSelection(Math.max(0, selection - 1));
       if (key.downArrow) setSelection(Math.min(state.sessions.length - 1, selection + 1));
@@ -168,6 +150,12 @@ export function App({session, version, onExit}: {session: Session; version: stri
     else if (/^\/rename(?:\s|$)/.test(value.trim())) void safeRun(async () => {await session.rename(value.trim().slice(7)); setDraft('');});
     else void session.send(value).then(sent => {if (sent) setDraft('');});
   };
+  const shortcuts = shortcutHints(width, state.phase === 'picking'
+    ? ['↑/↓ select', 'Enter resume', ...(state.sessionsCursor ? ['n more sessions'] : [])]
+    : state.phase === 'disconnected' ? ['Restart Hush to resume']
+    : [...(state.alerts.length ? ['Ctrl+L dismiss alert'] : []),
+      ...(expanded && !prompt ? ['Tab switch pane'] : []), 'PgUp/PgDn scroll',
+      'Alt+Enter newline', ...(!prompt ? ['/rename NAME'] : [])]);
   const heading = clean(`hush · ${session.options.cwd} · ${state.model ?? version}${state.threadId ? ' · ' + (state.name ?? state.threadId) : ''}`);
   if (columns < 35 || rows < 16) return <Box flexDirection="column"><Text>Enlarge terminal to at least 35×16.</Text><Text>Ctrl+C stops work · Ctrl+D exits</Text></Box>;
   return <Box flexDirection="column" height={height} width={width}>
@@ -186,9 +174,9 @@ export function App({session, version, onExit}: {session: Session; version: stri
     </Box>}
     <ActivityRow name="Codex" {...activity}/>
     {state.alerts.length > 0 && <Text color="yellow" wrap="truncate-end">! {clean(state.alerts.at(-1)!)}</Text>}
-    <Text color="gray" wrap="truncate-end">{expanded ? '▾ Details · Ctrl+O to close' : '▸ Details · Ctrl+O to expand'}{state.historyCursor ? ' · Ctrl+B older messages' : ''}</Text>
+    <Text color="gray" wrap="truncate-end">{expanded ? '▾ Details · Ctrl+O to close' : '▸ Details · Ctrl+O to expand'}{state.loadingHistory ? ' · Loading older messages…' : ''}</Text>
     <Editor key={prompt ? `prompt:${prompt.id}:${prompt.revision}:${questionIndex}` : 'draft'} value={prompt ? answer : draft} onChange={prompt ? setAnswer : setDraft}
-      onSubmit={submit} disabled={state.phase !== 'ready' || state.sending || state.interrupting || busy} secret={question?.isSecret ?? false} width={width}/>
-    <Text color="gray" wrap="truncate-end">{state.phase === 'disconnected' ? 'Disconnected · restart Hush to resume · Ctrl+D exit' : state.interrupting ? 'Interrupting…' : `Enter send · Ctrl+C stop · Ctrl+D exit · PgUp/PgDn scroll${state.alerts.length ? ' · Ctrl+L dismiss alert' : ''}`}</Text>
+      onSubmit={submit} disabled={state.phase !== 'ready' || state.sending || state.interrupting || busy} secret={question?.isSecret ?? false} width={width} history={prompt ? undefined : inputHistory}/>
+    <Text color="gray">{shortcuts}</Text>
   </Box>;
 }
