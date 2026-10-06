@@ -154,6 +154,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
   };
   const submit = (value: string) => {
     if (prompt) submitPrompt(value);
+    else if (['exit', '/exit'].includes(value.trim())) onExit();
     else void session.send(value).then(sent => {if (sent) setDraft('');});
   };
   const heading = clean(`hush · ${session.options.cwd} · ${state.model ?? version}${state.threadId ? ' · ' + state.threadId : ''}`);

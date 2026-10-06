@@ -101,6 +101,19 @@ with tempfile.TemporaryDirectory(prefix="hush-terminal-") as temp:
         assert b"\x1b[?1049l" in terminal.output, "Terminal not restored"
     finally:
         terminal.close()
+    for command in ["exit", "/exit"]:
+        terminal = Terminal(directory, [], env)
+        try:
+            terminal.wait("Send a message")
+            terminal.send(command)
+            terminal.send("\r")
+            terminal.wait("Resume: hush resume root")
+            terminal.process.wait(timeout=5)
+            assert terminal.process.returncode == 0
+            assert b"\x1b[?1049l" in terminal.output, "Terminal not restored after typed exit"
+            assert b"Visible test answer" not in terminal.output, "Exit was sent to the model"
+        finally:
+            terminal.close()
     for arguments in [["resume"], ["resume", "--last"], ["resume", "root"]]:
         terminal = Terminal(directory, arguments, env)
         try:
@@ -121,4 +134,4 @@ with tempfile.TemporaryDirectory(prefix="hush-terminal-") as temp:
         terminal.wait("Approval received")
     finally:
         terminal.close()
-print("PTY checks passed: conversation, details, interruption, resize, terminal restoration, resume picker/last/ID, and approval.")
+print("PTY checks passed: conversation, details, interruption, resize, typed exit, terminal restoration, resume picker/last/ID, and approval.")

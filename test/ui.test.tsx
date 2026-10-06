@@ -158,3 +158,50 @@ test('collapsed details do not format tool output on every keystroke', async () 
     assert.match(app.lastFrame()!, /large tool output/);
   } finally {app.unmount();}
 });
+
+test('exit and /exit close Hush locally, including during an active turn', async () => {
+  for (const command of ['exit', ' /exit ']) {
+    const {rpc, session} = await ready();
+    await session.send('work');
+    const calls = rpc.calls.length;
+    let exits = 0;
+    const app = render(<App session={session} version="test" onExit={() => {exits++;}}/>);
+    try {
+      await settle();
+      app.stdin.write(command); await settle();
+      assert.equal(exits, 0);
+      app.stdin.write('\r'); await settle();
+      assert.equal(exits, 1);
+      assert.equal(rpc.calls.length, calls, 'exit must not start or steer a model turn');
+    } finally {app.unmount();}
+  }
+});
+
+test('exit inside a longer message is ordinary conversation', async () => {
+  const {rpc, session} = await ready();
+  let exited = false;
+  const app = render(<App session={session} version="test" onExit={() => {exited = true;}}/>);
+  try {
+    await settle();
+    app.stdin.write('explain /exit'); await settle();
+    app.stdin.write('\r'); await settle();
+    assert.equal(exited, false);
+    assert.equal(rpc.calls.at(-1)!.params.input[0].text, 'explain /exit');
+  } finally {app.unmount();}
+});
+
+test('exit remains a literal answer to a pending question', async () => {
+  const {rpc, session} = await ready();
+  rpc.ask(88, 'item/tool/requestUserInput', {threadId: 'root', questions: [
+    {id: 'word', question: 'Which word?', options: null, isSecret: false},
+  ]});
+  let exited = false;
+  const app = render(<App session={session} version="test" onExit={() => {exited = true;}}/>);
+  try {
+    await settle();
+    app.stdin.write('exit'); await settle();
+    app.stdin.write('\r'); await settle();
+    assert.equal(exited, false);
+    assert.deepEqual(rpc.replies[0]?.result, {answers: {word: {answers: ['exit']}}});
+  } finally {app.unmount();}
+});
