@@ -71,7 +71,9 @@ Input uses standard [readline shortcuts](https://nodejs.org/api/readline.html#tt
 ## Conversation and details
 
 Your messages are cyan; replies render Markdown. A spinner shows active work;
-`?` means input is needed. Set `NO_COLOR=1` to disable colors.
+`?` means input is needed. The status line keeps the latest progress update from
+an active agent, prefixed with “Working:” or “Thinking:”. Specific tool activity
+is the fallback when no progress update is available. Set `NO_COLOR=1` to disable colors.
 
 Approvals and questions appear even with details closed. Follow their numbered
 choices or text instructions; Hush never answers approvals for you.

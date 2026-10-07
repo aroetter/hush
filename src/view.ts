@@ -56,8 +56,16 @@ export function activityStatus(state: State): {text: string; running: boolean; w
   const waiting = state.prompts.length > 0;
   const running = !waiting && (rootRunning || children > 0);
   const root = state.activities.get(state.threadId ?? '');
+  const candidates = [...state.activities].filter(([id, activity]) =>
+    (id === state.threadId ? rootRunning : activity.running) && activity.progress
+    && !state.prompts.some(prompt => prompt.threadId === id));
+  candidates.sort((a, b) => Number(b[1].progress!.commentary) - Number(a[1].progress!.commentary)
+    || b[1].progress!.sequence - a[1].progress!.sequence);
+  const current = candidates[0]?.[1];
+  const progress = current?.progress;
   const text = waiting ? 'Waiting for your input' : state.interrupting ? 'Interrupting…'
     : state.sending && !state.activeTurn ? 'Starting…'
+    : progress ? `${current.text === 'Thinking' ? 'Thinking' : 'Working'}: ${progress.text}`
     : rootRunning ? (root?.text === 'Ready' || !root ? 'Working' : root.text) : children ? 'Agents working' : 'Ready';
   return {text: text + (children ? ` · ${children} agent${children === 1 ? '' : 's'} active` : ''), running, waiting};
 }
