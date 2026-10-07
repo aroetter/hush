@@ -390,7 +390,7 @@ test('Details opens at the failed command, not diagnostic notices, and follows a
   const app = render(<App session={session} version="test" onExit={() => {}}/>);
   try {
     await settle();
-    assert.match(app.lastFrame()!, /Command failed \(exit 1\): check-server/);
+    assert.doesNotMatch(app.lastFrame()!, /Command failed|Ctrl\+L dismiss alert/);
     assert.doesNotMatch(app.lastFrame()!, /\/rename NAME/);
     app.stdin.write('\x0f'); await settle();
     assert.match(app.lastFrame()!, /check-server\nExit: 1\nServer connection refused/);
@@ -402,7 +402,7 @@ test('Details opens at the failed command, not diagnostic notices, and follows a
     app.stdin.write('\x0f'); await settle();
     assert.match(app.lastFrame()!, /Different failure/);
     app.stdin.write('\x0c'); await settle();
-    assert.equal(session.state.alertItem, undefined);
+    assert.equal(session.state.failedItem?.value.id, 'bad2');
     assert.doesNotMatch(app.lastFrame()!, /Approval 9|Notice 10/);
   } finally {app.unmount();}
 });

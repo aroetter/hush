@@ -128,10 +128,11 @@ test('subagent items remain in details and update their own activity row', async
   assert.match(details(session.state), /Child answer/);
   assert.equal(session.state.activities.get('child')?.text, 'Writing answer');
 });
-test('tool failures and process disconnects are visible, with further sends disabled', async () => {
+test('tool failures stay in details; disconnections stay visible and disable sending', async () => {
   const {rpc, session} = await ready();
   item(rpc, {type: 'commandExecution', id: 'bad', command: 'false', cwd: '/p', status: 'completed', aggregatedOutput: 'failure', exitCode: 1});
-  assert.match(session.state.alerts.join(' '), /Command failed/);
+  assert.deepEqual(session.state.alerts, []);
+  assert.equal(session.state.failedItem?.value.type, 'commandExecution');
   rpc.emit('fault', new Error('Disconnected'));
   assert.equal(session.state.phase, 'disconnected');
   assert.equal(await session.send('No'), false);
@@ -278,7 +279,8 @@ test('historical failures remain in details without new failure banners', async 
   assert.match(details(session.state), /Old command output/);
   assert.match(details(session.state), /Old turn failed/);
   item(rpc, {type: 'commandExecution', id: 'new-command', command: 'false', cwd: '/project', status: 'completed', exitCode: 1});
-  assert.match(session.state.alerts.join(' '), /Command failed/);
+  assert.deepEqual(session.state.alerts, []);
+  assert.equal(session.state.failedItem?.value.type, 'commandExecution');
 });
 
 test('rename validates names and tracks external name updates', async () => {
@@ -290,4 +292,38 @@ test('rename validates names and tracks external name updates', async () => {
   assert.equal(session.state.name, 'Named session');
   rpc.event('thread/name/updated', {threadId: 'root', threadName: 'Renamed elsewhere'});
   assert.equal(session.state.name, 'Renamed elsewhere');
+});
+
+test('failed attempts and retries stay quiet, while failed turns and connection errors alert', async () => {
+  const {rpc, session} = await ready();
+  rpc.event('turn/started', {threadId: 'root', turn: {id: 'work'}});
+  item(rpc, {type: 'commandExecution', id: 'attempt', command: 'browser-check', cwd: '/project', status: 'completed', exitCode: 1, aggregatedOutput: 'Chrome launch failed'}, true, 'root', 'work');
+  rpc.event('error', {threadId: 'root', willRetry: true, error: {message: 'Temporary provider problem'}});
+  item(rpc, {type: 'commandExecution', id: 'retry', command: 'other-check', cwd: '/project', status: 'completed', exitCode: 0, aggregatedOutput: 'Checks completed'}, true, 'root', 'work');
+  rpc.event('turn/completed', {threadId: 'root', turn: {id: 'work', status: 'completed'}});
+  assert.deepEqual(session.state.alerts, []);
+  assert.match(details(session.state), /Chrome launch failed/);
+  assert.match(details(session.state), /Temporary provider problem/);
+  assert.equal(session.state.failedItem?.value.id, 'attempt');
+  rpc.event('turn/started', {threadId: 'root', turn: {id: 'next'}});
+  assert.equal(session.state.failedItem, undefined);
+  assert.match(details(session.state), /Chrome launch failed/);
+  rpc.event('turn/completed', {threadId: 'root', turn: {id: 'next', status: 'failed', error: {message: 'Task could not finish'}}});
+  assert.match(session.state.alerts.join(' '), /Task could not finish/);
+  rpc.emit('fault', new Error('Connection lost'));
+  assert.match(session.state.alerts.join(' '), /Connection lost/);
+});
+
+test('file and tool failures remain inspectable without persistent warnings', async () => {
+  const {rpc, session} = await ready();
+  for (const value of [
+    {type: 'fileChange', id: 'patch-failed', status: 'failed', changes: []},
+    {type: 'mcpToolCall', id: 'mcp-failed', tool: 'browser', error: {message: 'Browser unavailable'}},
+    {type: 'dynamicToolCall', id: 'tool-failed', tool: 'check', success: false, status: 'failed'},
+  ]) {
+    item(rpc, value);
+    assert.equal(session.state.failedItem?.value.id, value.id);
+    assert.deepEqual(session.state.alerts, []);
+  }
+  assert.match(details(session.state), /Browser unavailable/);
 });

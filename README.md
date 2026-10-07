@@ -76,9 +76,10 @@ Your messages are cyan; replies render Markdown. A spinner shows active work;
 Approvals and questions appear even with details closed. Follow their numbered
 choices or text instructions; Hush never answers approvals for you.
 
-Failure alerts identify the command. Open details to see its exit code and output.
-Alerts remain until dismissed, even if Codex later recovers. Routine automatic
-approvals and historical failures stay in details.
+Individual command/tool failures and automatic retries stay in details; a failed
+attempt does not mean the task failed. Details opens at the latest failed tool
+from the current turn. Failed turns, connection problems, and requests needing
+your input remain visible. Ctrl+L dismisses alerts.
 
 ## Troubleshooting
 
