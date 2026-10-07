@@ -20,9 +20,11 @@ test('details toggle without moving commands into the conversation', async () =>
   assert.doesNotMatch(app.lastFrame()!, /hidden-command/);
   app.stdin.write('\x0f'); await settle();
   assert.match(app.lastFrame()!, /hidden-command/);
+  assert.match(app.lastFrame()!, /── Details · scrolling here · Ctrl\+O close ─+/);
   assert.match(app.lastFrame()!, /Persistent conversation/);
   app.stdin.write('\x0f'); await settle();
   assert.doesNotMatch(app.lastFrame()!, /hidden-command/);
+  assert.doesNotMatch(app.lastFrame()!, /── Details/);
   app.unmount();
 });
 test('typing and Enter send once; Ctrl+C interrupts; Ctrl+D exits', async () => {

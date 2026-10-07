@@ -164,6 +164,8 @@ export function App({session, version, onExit}: {session: Session; version: stri
     : [...(state.alerts.length ? ['Ctrl+L dismiss alert'] : []),
       ...(expanded && !prompt ? ['Tab switch pane'] : []), 'PgUp/PgDn scroll',
       'Alt+Enter newline']);
+  const detailsHeading = `── Details · ${focusDetails ? 'scrolling here' : 'Tab to scroll here'} · Ctrl+O close `;
+  const detailsDivider = detailsHeading + '─'.repeat(Math.max(0, width - detailsHeading.length));
   const heading = clean(`hush · ${session.options.cwd} · ${state.model ?? version}${state.threadId ? ' · ' + (state.name ?? state.threadId) : ''}`);
   if (columns < 35 || rows < 16) return <Box flexDirection="column"><Text>Enlarge terminal to at least 35×16.</Text><Text>Ctrl+C stops work · Ctrl+D exits</Text></Box>;
   return <Box flexDirection="column" height={height} width={width}>
@@ -177,7 +179,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
         </Text>)}
     </Box> : <Box height={chatHeight} overflow="hidden"><Text color="white">{viewport(chat, chatHeight, chatOffset)}</Text></Box>}
     {lowerHeight > 0 && <Box height={lowerHeight} flexDirection="column" overflow="hidden">
-      <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · PgUp/PgDn scroll` : `Details · ${focusDetails ? 'scrolling here' : 'Tab to scroll here'} · Ctrl+O close`}</Text>
+      <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · PgUp/PgDn scroll` : detailsDivider}</Text>
       <Text color="white">{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
     </Box>}
     <ActivityRow name="Codex" {...activity}/>
