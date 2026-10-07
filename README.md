@@ -145,6 +145,12 @@ Routine automatic approvals stay in Details. Approval requests, denied reviews,
 errors, and other warnings remain visible. Failures loaded from saved history stay
 in Details instead of appearing as new errors.
 
+A command-failure banner names the command. Opening Details shows that command
+first, with its working directory, exit code, and output. If no output was
+provided, Hush says so. While Details is open, the banner does not tell you to
+open it again. Dismiss the alert with Ctrl+L to return to the ordinary details
+order. Diagnostic headings do not display internal record numbers.
+
 ## Keyboard
 
 The bottom line shows complete shortcut hints that fit the terminal width, with

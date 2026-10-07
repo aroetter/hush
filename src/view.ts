@@ -27,8 +27,8 @@ export function conversationLines(state: State, width: number, colors: ChalkInst
       ...(user ? lines(body, width).map(line => colors.cyan(line)) : markdown(body, width, colors))];
   });
 }
-export function itemDetails({value: v, threadId}: Item): string {
-  if (v.type === 'commandExecution') return `Command · ${v.status}\nDirectory: ${v.cwd}\n${v.command}\n${v.aggregatedOutput ?? ''}\nExit: ${v.exitCode ?? 'pending'}`;
+export function itemDetails({value: v, threadId}: Item, output?: string): string {
+  if (v.type === 'commandExecution') return `Command · ${v.status}\nDirectory: ${v.cwd}\n${v.command}\nExit: ${v.exitCode ?? 'pending'}\n${v.aggregatedOutput || output || '[No command output was provided by Codex.]'}`;
   if (v.type === 'fileChange') return `File changes · ${v.status}\n${v.changes.map(change => `${change.path}\n${change.diff}`).join('\n')}`;
   if (v.type === 'agentMessage') return `Agent ${threadId} · ${v.phase ?? 'message'}\n${v.text}`;
   return JSON.stringify(v, null, 2);
@@ -36,7 +36,11 @@ export function itemDetails({value: v, threadId}: Item): string {
 export function details(state: State): string {
   const items = state.items.filter(item => item.value.type !== 'userMessage' && !(item.threadId === state.threadId && item.value.type === 'agentMessage' && item.value.phase === 'final_answer'));
   const activity = [...state.activities.values()].map(agent => `${agent.name} · ${agent.text}`).join('\n');
-  return [counts(state), activity, ...items.map(itemDetails), ...[...state.details].map(([title, body]) => `${title}\n${body}`)].join('\n\n');
+  const format = (item: Item) => itemDetails(item, state.details.get(`Output ${item.value.id}`));
+  return [state.alertItem ? format(state.alertItem) : '', counts(state), activity,
+    ...items.filter(item => item !== state.alertItem).map(format),
+    ...[...state.details].map(([title, body]) => `${title.replace(/^(Notice|Approval) \d+$/, '$1')}\n${body}`),
+  ].filter(Boolean).join('\n\n');
 }
 export function counts(state: State): string {
   const commands = state.items.filter(item => item.value.type === 'commandExecution').length;

@@ -376,3 +376,31 @@ test('automatic history loading reports failure and preserves the conversation',
     assert.equal(session.state.loadingHistory, false);
   } finally {app.unmount();}
 });
+
+test('Details opens at the failed command, not diagnostic notices, and follows a new failure', async () => {
+  const {rpc, session} = await ready();
+  const fail = (id: string, command: string, aggregatedOutput: string) => item(rpc,
+    {type: 'commandExecution', id, command, cwd: '/project', status: 'completed', exitCode: 1, aggregatedOutput});
+  fail('bad', 'check-server', 'Server connection refused');
+  session.state.details.set('account/rateLimits/updated ', 'Unrelated account metadata\n'.repeat(50));
+  session.state.details.set('Approval 9', 'Automatic approval review approved');
+  session.state.details.set('Notice 10', 'Some notice');
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    assert.match(app.lastFrame()!, /Command failed \(exit 1\): check-server/);
+    assert.doesNotMatch(app.lastFrame()!, /\/rename NAME/);
+    app.stdin.write('\x0f'); await settle();
+    assert.match(app.lastFrame()!, /check-server\nExit: 1\nServer connection refused/);
+    assert.doesNotMatch(app.lastFrame()!, /See details|Ctrl\+O for details|Unrelated account metadata/);
+    app.stdin.write('\x1b[6~'); await settle();
+    fail('bad2', 'another-check', 'Different failure'); await settle();
+    assert.match(app.lastFrame()!, /another-check\nExit: 1\nDifferent failure/);
+    app.stdin.write('\x0f'); await settle();
+    app.stdin.write('\x0f'); await settle();
+    assert.match(app.lastFrame()!, /Different failure/);
+    app.stdin.write('\x0c'); await settle();
+    assert.equal(session.state.alertItem, undefined);
+    assert.doesNotMatch(app.lastFrame()!, /Approval 9|Notice 10/);
+  } finally {app.unmount();}
+});
