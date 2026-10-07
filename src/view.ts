@@ -37,8 +37,8 @@ export function details(state: State): string {
   const items = state.items.filter(item => item.value.type !== 'userMessage' && !(item.threadId === state.threadId && item.value.type === 'agentMessage' && item.value.phase === 'final_answer'));
   const activity = [...state.activities.values()].map(agent => `${agent.name} · ${agent.text}`).join('\n');
   const format = (item: Item) => itemDetails(item, state.details.get(`Output ${item.value.id}`));
-  return [state.alertItem ? format(state.alertItem) : '', counts(state), activity,
-    ...items.filter(item => item !== state.alertItem).map(format),
+  return [state.failedItem ? format(state.failedItem) : '', counts(state), activity,
+    ...items.filter(item => item !== state.failedItem).map(format),
     ...[...state.details].map(([title, body]) => `${title.replace(/^(Notice|Approval) \d+$/, '$1')}\n${body}`),
   ].filter(Boolean).join('\n\n');
 }

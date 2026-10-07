@@ -25,7 +25,7 @@ export interface State {
   details: Map<string, string>;
   prompts: Prompt[];
   alerts: string[];
-  alertItem?: Item;
+  failedItem?: Item;
   sessions: Thread[];
   sessionsCursor: string | null;
   historyCursor: string | null;
@@ -69,14 +69,13 @@ export class Session extends EventEmitter {
     this.state.details.set(key, text.length > 200_000 ? '[Earlier output omitted from live view]\n' + text.slice(-200_000) : text);
     if (this.state.details.size > 500) this.state.details.delete(this.state.details.keys().next().value!);
   }
-  alert(message: string, item?: Item): void {
+  alert(message: string): void {
     this.state.alerts = this.state.alerts.filter(alert => alert !== message);
     this.state.alerts.push(message);
-    this.state.alertItem = item;
-    if (!item) this.detail(`Notice ${this.state.details.size}`, message);
+    this.detail(`Notice ${this.state.details.size}`, message);
     this.changed();
   }
-  dismissAlerts(): void { this.state.alerts = []; this.state.alertItem = undefined; this.changed(); }
+  dismissAlerts(): void { this.state.alerts = []; this.changed(); }
   private disconnected(error: Error): void {
     if (this.failure) return;
     this.failure = error;
@@ -226,10 +225,11 @@ export class Session extends EventEmitter {
     }
     if (history) return;
     this.activity(item);
-    if (value.type === 'commandExecution' && complete && (value.exitCode || value.status === 'failed')) this.alert(`Command failed (exit ${value.exitCode ?? 'unknown'}): ${value.command}`, item);
-    if (value.type === 'fileChange' && value.status === 'failed') this.alert('File change failed.', item);
-    if (value.type === 'mcpToolCall' && value.error) this.alert(`Tool ${value.tool}: ${value.error.message}`, item);
-    if (value.type === 'dynamicToolCall' && (value.success === false || value.status === 'failed')) this.alert(`Tool ${value.tool} failed.`, item);
+    const failed = value.type === 'commandExecution' ? !!value.exitCode || value.status === 'failed'
+      : value.type === 'fileChange' ? value.status === 'failed'
+      : value.type === 'mcpToolCall' ? !!value.error
+      : value.type === 'dynamicToolCall' ? value.success === false || value.status === 'failed' : false;
+    if (complete && failed) this.state.failedItem = item;
   }
 
   private activity(item: Item): void {
@@ -275,6 +275,7 @@ export class Session extends EventEmitter {
     } else if (method === 'turn/started') {
       this.state.activities.set(p.threadId, {name: this.state.activities.get(p.threadId)?.name ?? 'Codex', text: 'Working', running: true});
       if (p.threadId === this.state.threadId) {
+        this.state.failedItem = undefined;
         this.state.activeTurn = p.turn.id;
         this.state.interrupting = false;
         if (this.interruptPending) void this.interrupt();
@@ -310,7 +311,9 @@ export class Session extends EventEmitter {
     } else if (method === 'serverRequest/resolved') {
       this.state.prompts = this.state.prompts.filter(prompt => prompt.id !== p.requestId);
     } else if (method === 'error') {
-      this.alert(`${p.willRetry ? 'Codex is retrying: ' : ''}${p.error?.message ?? JSON.stringify(p)}`);
+      const message = p.error?.message ?? JSON.stringify(p);
+      if (p.willRetry) this.detail('Codex retry', message);
+      else this.alert(message);
     } else if (['warning', 'configWarning', 'guardianWarning', 'deprecationNotice', 'thread/realtime/error'].includes(method)) {
       const message = p.message ?? p.summary ?? JSON.stringify(p);
       // This protocol version provides these informational approvals as warning text.

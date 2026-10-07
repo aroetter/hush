@@ -36,10 +36,10 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const [focusDetails, setFocusDetails] = useState(false);
   const [chatOffset, setChatOffset] = useState<number | null>(null);
   const [detailOffset, setDetailOffset] = useState<number | null>(null);
-  const [shownAlertItem, setShownAlertItem] = useState(state.alertItem);
-  if (shownAlertItem !== state.alertItem) {
-    setShownAlertItem(state.alertItem);
-    setDetailOffset(state.alertItem ? 0 : null);
+  const [shownFailedItem, setShownFailedItem] = useState(state.failedItem);
+  if (shownFailedItem !== state.failedItem) {
+    setShownFailedItem(state.failedItem);
+    setDetailOffset(state.failedItem ? 0 : null);
   }
   const [promptOffset, setPromptOffset] = useState<number | null>(0);
   const [draft, setDraft] = useState('');
@@ -116,7 +116,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
       return;
     }
     if (key.ctrl && input === 'o') {
-      if (!expanded && state.alertItem) setDetailOffset(0);
+      if (!expanded && state.failedItem) setDetailOffset(0);
       setExpanded(!expanded); setFocusDetails(!expanded); return;
     }
     if (key.ctrl && input === 'l') {session.dismissAlerts(); return;}
@@ -183,7 +183,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
       <Text color="white">{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
     </Box>}
     <ActivityRow name="Codex" {...activity}/>
-    {state.alerts.length > 0 && <Text color="yellow" wrap="truncate-end">! {clean(state.alerts.at(-1)!).replace(/\n/g, ' ')}{state.alertItem && !expanded && !prompt ? ' · Ctrl+O for details' : ''}</Text>}
+    {state.alerts.length > 0 && <Text color="yellow" wrap="truncate-end">! {clean(state.alerts.at(-1)!).replace(/\n/g, ' ')}</Text>}
     <Text color="gray" wrap="truncate-end">{expanded ? '▾ Details · Ctrl+O to close' : '▸ Details · Ctrl+O to expand'}{state.loadingHistory ? ' · Loading older messages…' : ''}</Text>
     <Editor key={prompt ? `prompt:${prompt.id}:${prompt.revision}:${questionIndex}` : 'draft'} value={prompt ? answer : draft} onChange={prompt ? setAnswer : setDraft}
       onSubmit={submit} disabled={state.phase !== 'ready' || state.sending || state.interrupting || busy} secret={question?.isSecret ?? false} width={width} history={prompt ? undefined : inputHistory}/>
