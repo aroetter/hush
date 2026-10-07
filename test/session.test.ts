@@ -137,6 +137,23 @@ test('tool failures stay in details; disconnections stay visible and disable sen
   assert.equal(session.state.phase, 'disconnected');
   assert.equal(await session.send('No'), false);
 });
+test('diagnostic log keywords stay in details while connection faults still alert', async () => {
+  const {rpc, session} = await ready();
+  await session.send('Work');
+  const logs = ['ERROR temporary failure\n', 'fatal handler installed; panic handler installed\n'];
+  let changes = 0;
+  session.on('change', () => changes++);
+  for (const log of logs) rpc.emit('log', log);
+  assert.equal(changes, logs.length);
+  assert.deepEqual(session.state.alerts, []);
+  assert.equal(session.state.activeTurn, 'turn-1');
+  assert.equal(session.state.details.get('App-server log'), logs.join(''));
+  assert.match(details(session.state), /ERROR temporary failure/);
+  rpc.emit('fault', new Error('Codex app-server exited (1)'));
+  assert.equal(session.state.phase, 'disconnected');
+  assert.match(session.state.alerts.join(' '), /Codex app-server exited \(1\)/);
+  assert.equal(await session.send('More'), false);
+});
 test('terminal escape sequences cannot execute through displayed text', () => {
   assert.equal(clean('\x1b[31mhello\x1b[0m\x1b]52;c;YWJj\x07'), 'hello');
 });

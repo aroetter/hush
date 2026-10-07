@@ -78,7 +78,7 @@ is the fallback when no progress update is available. Set `NO_COLOR=1` to disabl
 Approvals and questions appear even with details closed. Follow their numbered
 choices or text instructions; Hush never answers approvals for you.
 
-Individual command/tool failures and automatic retries stay in details; a failed
+Diagnostic logs, individual command/tool failures, and automatic retries stay in details; a failed
 attempt does not mean the task failed. Details opens at the latest failed tool
 from the current turn. Failed turns, connection problems, and requests needing
 your input remain visible. Ctrl+L dismisses alerts.

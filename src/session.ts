@@ -62,8 +62,7 @@ export class Session extends EventEmitter {
     });
     rpc.on('log', (text: string) => {
       this.detail('App-server log', `${this.state.details.get('App-server log') ?? ''}${text}`);
-      if (/\b(error|fatal|panic)\b/i.test(text)) this.alert('Codex logged an error; open details to inspect the app-server log.');
-      else this.changed();
+      this.changed();
     });
     rpc.on('fault', (error: Error) => this.disconnected(error));
   }
