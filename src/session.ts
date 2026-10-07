@@ -25,6 +25,7 @@ export interface State {
   details: Map<string, string>;
   prompts: Prompt[];
   alerts: string[];
+  alertItem?: Item;
   sessions: Thread[];
   sessionsCursor: string | null;
   historyCursor: string | null;
@@ -68,12 +69,14 @@ export class Session extends EventEmitter {
     this.state.details.set(key, text.length > 200_000 ? '[Earlier output omitted from live view]\n' + text.slice(-200_000) : text);
     if (this.state.details.size > 500) this.state.details.delete(this.state.details.keys().next().value!);
   }
-  alert(message: string): void {
-    if (!this.state.alerts.includes(message)) this.state.alerts.push(message);
-    this.detail(`Notice ${this.state.details.size}`, message);
+  alert(message: string, item?: Item): void {
+    this.state.alerts = this.state.alerts.filter(alert => alert !== message);
+    this.state.alerts.push(message);
+    this.state.alertItem = item;
+    if (!item) this.detail(`Notice ${this.state.details.size}`, message);
     this.changed();
   }
-  dismissAlerts(): void { this.state.alerts = []; this.changed(); }
+  dismissAlerts(): void { this.state.alerts = []; this.state.alertItem = undefined; this.changed(); }
   private disconnected(error: Error): void {
     if (this.failure) return;
     this.failure = error;
@@ -223,10 +226,10 @@ export class Session extends EventEmitter {
     }
     if (history) return;
     this.activity(item);
-    if (value.type === 'commandExecution' && complete && (value.exitCode || value.status === 'failed')) this.alert(`Command failed (exit ${value.exitCode ?? 'unknown'}). See details.`);
-    if (value.type === 'fileChange' && value.status === 'failed') this.alert('File change failed. See details.');
-    if (value.type === 'mcpToolCall' && value.error) this.alert(`Tool ${value.tool}: ${value.error.message}`);
-    if (value.type === 'dynamicToolCall' && (value.success === false || value.status === 'failed')) this.alert(`Tool ${value.tool} failed. See details.`);
+    if (value.type === 'commandExecution' && complete && (value.exitCode || value.status === 'failed')) this.alert(`Command failed (exit ${value.exitCode ?? 'unknown'}): ${value.command}`, item);
+    if (value.type === 'fileChange' && value.status === 'failed') this.alert('File change failed.', item);
+    if (value.type === 'mcpToolCall' && value.error) this.alert(`Tool ${value.tool}: ${value.error.message}`, item);
+    if (value.type === 'dynamicToolCall' && (value.success === false || value.status === 'failed')) this.alert(`Tool ${value.tool} failed.`, item);
   }
 
   private activity(item: Item): void {
