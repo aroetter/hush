@@ -59,10 +59,13 @@ Type `/rename My session name` in the conversation to name the session.
 
 | Key | Hush action |
 | --- | --- |
-| Ctrl+O | Expand or collapse details |
-| Page Up / Page Down | Scroll; reaching the top of the conversation loads older messages |
+| Ctrl+O | Expand and select Details for scrolling, or collapse it |
+| Page Up / Page Down (Mac: Fn+↑ / Fn+↓) | Scroll the selected section; reaching the top of Conversation loads older messages |
 | Tab | Switch scrolling between conversation and expanded details |
 | Ctrl+L | Dismiss alerts |
+
+The footer names the section being scrolled. With Details closed, scrolling applies
+to Conversation. Up/Down alone navigate input history.
 
 Enter sends; Alt+Enter adds a newline. Ctrl+C interrupts work or clears input;
 Ctrl+D exits. `exit` and `/exit` also quit, except when answering a pending prompt.
