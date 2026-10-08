@@ -9,7 +9,7 @@ import type {State, Item} from './session.js';
 function messages(state: State): string[] {
   return state.items.filter(item => item.threadId === state.threadId).flatMap(({value: v, complete}) => {
     if (v.type === 'userMessage') return [`You\n${v.content.map(input => input.type === 'text' ? input.text : `[${input.type}]`).join('\n')}`];
-    if (v.type === 'agentMessage' && (v.phase === 'final_answer' || (v.phase !== 'commentary' && complete) || v.delivery === 'async' || v.questions?.length)) {
+    if (v.type === 'agentMessage') {
       return [`Codex\n${v.text}${v.questions?.length ? '\n' + v.questions.map(q => q.title + (q.options?.length ? '\n' + q.options.join(' · ') : '')).join('\n') : ''}`];
     }
     if (v.type === 'plan' && complete) return [`Codex plan\n${v.text}`];
@@ -34,7 +34,7 @@ export function itemDetails({value: v, threadId}: Item, output?: string): string
   return JSON.stringify(v, null, 2);
 }
 export function details(state: State): string {
-  const items = state.items.filter(item => item.value.type !== 'userMessage' && !(item.threadId === state.threadId && item.value.type === 'agentMessage' && item.value.phase === 'final_answer'));
+  const items = state.items.filter(item => item.value.type !== 'userMessage' && !(item.threadId === state.threadId && item.value.type === 'agentMessage'));
   const activity = [...state.activities.values()].map(agent => `${agent.name} · ${agent.text}`).join('\n');
   const format = (item: Item) => itemDetails(item, state.details.get(`Output ${item.value.id}`));
   return [state.failedItem ? format(state.failedItem) : '', counts(state), activity,

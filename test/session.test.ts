@@ -6,7 +6,7 @@ import {Session} from '../src/session.js';
 import {parseOptions} from '../src/args.js';
 import {conversation, details, clean} from '../src/view.js';
 
-test('commentary and commands update activity; answers and questions stay in conversation', async () => {
+test('all main-agent messages stay in conversation; commands stay in details', async () => {
   const {rpc, session} = await ready();
   item(rpc, agent('progress', 'Reading files', 'commentary'));
   item(rpc, {type: 'commandExecution', id: 'cmd', command: 'secret-command', cwd: '/project', status: 'inProgress', commandActions: [], aggregatedOutput: null, exitCode: null}, false);
@@ -14,8 +14,9 @@ test('commentary and commands update activity; answers and questions stay in con
   item(rpc, agent('answer', 'The answer.'));
   item(rpc, {...agent('question', 'Which file?', 'commentary'), questions: [{title: 'Which file?', options: ['A', 'B']}]});
   assert.match(conversation(session.state), /The answer/);
+  assert.match(conversation(session.state), /Reading files/);
   assert.match(conversation(session.state), /Which file/);
-  assert.doesNotMatch(conversation(session.state), /secret-command|private output|Reading files/);
+  assert.doesNotMatch(conversation(session.state), /secret-command|private output/);
   assert.match(details(session.state), /secret-command/);
   assert.match(details(session.state), /private output/);
 });
@@ -343,4 +344,30 @@ test('file and tool failures remain inspectable without persistent warnings', as
     assert.deepEqual(session.state.alerts, []);
   }
   assert.match(details(session.state), /Browser unavailable/);
+});
+
+test('main-agent commentary and unclassified messages stream without waiting for completion', async () => {
+  for (const phase of ['commentary', null]) {
+    const {rpc, session} = await ready();
+    item(rpc, {...agent('reply', '', phase ?? undefined), phase}, false);
+    rpc.event('item/agentMessage/delta', {threadId: 'root', turnId: 'turn-1', itemId: 'reply', delta: 'You can merge these now'});
+    assert.match(conversation(session.state), /You can merge these now/);
+    item(rpc, {...agent('reply', 'You can merge these now: #150.', phase ?? undefined), phase});
+    assert.equal(conversation(session.state), 'Codex\nYou can merge these now: #150.');
+    item(rpc, agent('child-reply', 'Private child update', 'commentary'), true, 'child');
+    item(rpc, {type: 'reasoning', id: 'reasoning', summary: ['Private reasoning'], content: []});
+    assert.doesNotMatch(conversation(session.state), /Private/);
+    assert.match(details(session.state), /Private child update|Private reasoning/);
+  }
+});
+
+test('resume shows saved commentary replies in conversation', async () => {
+  const rpc = new FakeConnection();
+  const original = rpc.handler;
+  rpc.handler = async (method, params) => method === 'thread/turns/list'
+    ? {data: [{id: 'saved-turn', status: 'completed', itemsView: 'full', items: [agent('saved-reply', 'Leave the draft PRs alone.', 'commentary')]}], nextCursor: null}
+    : original(method, params);
+  const session = new Session(rpc, parseOptions(['resume', 'root'], '/project'));
+  await session.start();
+  assert.equal(conversation(session.state), 'Codex\nLeave the draft PRs alone.');
 });

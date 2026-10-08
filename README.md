@@ -73,6 +73,8 @@ Input uses standard [readline shortcuts](https://nodejs.org/api/readline.html#tt
 
 ## Conversation and details
 
+Conversation shows all main-agent messages, including replies sent while work continues.
+Reasoning, commands, diffs, logs, and subagent messages stay in Details.
 Your messages are cyan; replies render Markdown. A spinner shows active work;
 `?` means input is needed. The status line keeps the latest progress update from
 an active agent, prefixed with “Working:” or “Thinking:”. Specific tool activity

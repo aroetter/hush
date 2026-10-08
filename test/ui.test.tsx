@@ -407,18 +407,18 @@ test('Details opens at the failed command, not diagnostic notices, and follows a
   } finally {app.unmount();}
 });
 
-test('meaningful progress updates overwrite one row without entering conversation', async () => {
+test('subagent progress updates overwrite one row without entering conversation', async () => {
   const {rpc, session} = await ready();
   rpc.event('turn/started', {threadId: 'root', turn: {id: 'work'}});
-  item(rpc, agent('progress', 'Checking playback\non mobile screens', 'commentary'));
+  item(rpc, agent('progress', 'Checking playback\non mobile screens', 'commentary'), true, 'child');
   const app = render(<App session={session} version="test" onExit={() => {}}/>);
   try {
     await settle();
     assert.equal(app.lastFrame()!.split('\n').filter(line => line.includes('Checking playback')).length, 1);
     assert.match(app.lastFrame()!, /Working: Checking playback on mobile screens/);
-    item(rpc, {type: 'reasoning', id: 'r', summary: [], content: []}); await settle();
+    item(rpc, {type: 'reasoning', id: 'r', summary: [], content: []}, true, 'child'); await settle();
     assert.match(app.lastFrame()!, /Thinking: Checking playback on mobile screens/);
-    item(rpc, agent('next', 'Running the final checks', 'commentary')); await settle();
+    item(rpc, agent('next', 'Running the final checks', 'commentary'), true, 'child'); await settle();
     assert.doesNotMatch(app.lastFrame()!, /Checking playback/);
     assert.match(app.lastFrame()!, /Working: Running the final checks/);
     app.stdin.write('\x0f'); await settle();
