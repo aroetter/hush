@@ -80,7 +80,13 @@ with tempfile.TemporaryDirectory(prefix="hush-terminal-") as temp:
     try:
         terminal.wait("Send a message")
         assert b"\x1b[?1049h" in terminal.output, "Missing alternate screen"
-        terminal.send("hello")
+        terminal.send("\x1b[200~alpha\nbeta\ngamma\ndelta\nepsilon\x1b[201~")
+        terminal.wait("[Pasted 5 lines]")
+        assert b"Visible test answer" not in terminal.output, "Paste was submitted automatically"
+        terminal.send("\x07")
+        terminal.wait("epsilon")
+        terminal.send("\x07")
+        terminal.wait("[Pasted 5 lines]")
         terminal.send("\r")
         terminal.wait("Visible test answer")
         assert b"hidden-command-for-test" not in terminal.output

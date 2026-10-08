@@ -80,3 +80,88 @@ test('secret input is masked and never recorded in readline history', async () =
     assert.ok(app.frames.every(frame => !frame.includes('secret-value')));
   } finally {app.unmount();}
 });
+
+const paste = (text: string) => `\x1b[200~${text}\x1b[201~`;
+
+test('long pastes collapse, expand, and submit full text with surrounding input', async () => {
+  const {app, key, submitted, value} = input();
+  const text = 'alpha\nbeta\ngamma\ndelta\nepsilon';
+  try {
+    await delay(40);
+    await key('Please read: ');
+    await key(paste(text));
+    assert.match(app.lastFrame()!, /Please read: \[Pasted 5 lines\]/);
+    assert.match(app.lastFrame()!, /Ctrl\+G expand/);
+    assert.deepEqual(submitted, []);
+    await key(' then explain.');
+    assert.equal(value(), `Please read: ${text} then explain.`);
+    await key('\x07');
+    assert.match(app.lastFrame()!, /epsilon then explain/);
+    assert.match(app.lastFrame()!, /Ctrl\+G collapse/);
+    assert.doesNotMatch(app.lastFrame()!, /\[Pasted/);
+    await key('\x07');
+    assert.match(app.lastFrame()!, /\[Pasted 5 lines\]/);
+    await key('\r');
+    assert.deepEqual(submitted, [`Please read: ${text} then explain.`]);
+    assert.doesNotMatch(app.lastFrame()!, /Pasted|Ctrl\+G/);
+    await key('\x10');
+    assert.equal(value(), submitted[0]);
+  } finally {app.unmount();}
+});
+
+test('multiple paste previews track edits before them and reveal edits inside them', async () => {
+  const {app, key, submitted, value} = input();
+  const first = 'one\ntwo\nthree\nfour\nfive';
+  const second = 'six\nseven\neight\nnine\nten';
+  try {
+    await delay(40);
+    await key(paste(first)); await key(' / '); await key(paste(second));
+    assert.equal(app.lastFrame()!.match(/\[Pasted 5 lines\]/g)?.length, 2);
+    await key('\x01'); await key('prefix ');
+    assert.equal(app.lastFrame()!.match(/\[Pasted 5 lines\]/g)?.length, 2);
+    await key('\x05'); await key('\x02');
+    assert.match(app.lastFrame()!, /te▏n/);
+    await key('X');
+    assert.equal(value(), `prefix ${first} / six\nseven\neight\nnine\nteXn`);
+    await key('\x01'); await key('\x0b');
+    assert.equal(value(), '');
+    assert.doesNotMatch(app.lastFrame()!, /Pasted|Ctrl\+G/);
+    await key('\x19'); await key('\r');
+    assert.equal(submitted[0], `prefix ${first} / six\nseven\neight\nnine\nteXn`);
+  } finally {app.unmount();}
+});
+
+test('short pastes stay visible; long single lines collapse; secrets never reveal content', async () => {
+  const normal = input();
+  const secret = input(true);
+  try {
+    await delay(40);
+    await normal.key(paste('short\npaste'));
+    assert.match(normal.app.lastFrame()!, /short\npaste/);
+    assert.doesNotMatch(normal.app.lastFrame()!, /Pasted/);
+    await normal.key('\x15');
+    const long = 'x'.repeat(500);
+    await normal.key(paste(long));
+    assert.match(normal.app.lastFrame()!, /\[Pasted 500 characters\]/);
+    await normal.key('\r');
+    assert.equal(normal.submitted[0], long);
+    await secret.key(paste('hidden\n'.repeat(6)));
+    await secret.key('\x07');
+    assert.ok(secret.app.frames.every(frame => !/hidden|Pasted|Ctrl\+G/.test(frame)));
+  } finally {normal.app.unmount(); secret.app.unmount();}
+});
+
+test('identical pastes inserted before a preview keep separate spans', async () => {
+  const {app, key, value, submitted} = input();
+  const text = 'x'.repeat(500);
+  try {
+    await delay(40);
+    await key(paste(text));
+    await key('\x01');
+    await key(paste(text));
+    assert.equal(app.lastFrame()!.match(/\[Pasted 500 characters\]/g)?.length, 2);
+    assert.equal(value(), text + text);
+    await key('\r');
+    assert.deepEqual(submitted, [text + text]);
+  } finally {app.unmount();}
+});
