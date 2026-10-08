@@ -69,6 +69,8 @@ to Conversation. Up/Down alone navigate input history.
 
 Enter sends; Alt+Enter adds a newline. Ctrl+C interrupts work or clears input;
 Ctrl+D exits. `exit` and `/exit` also quit, except when answering a pending prompt.
+Pastes of 5+ lines or 500+ characters collapse in the input. Ctrl+G expands/collapses
+them; moving into a paste reveals it for editing. Enter sends the full text.
 Input uses standard [readline shortcuts](https://nodejs.org/api/readline.html#tty-keybindings).
 
 ## Conversation and details
