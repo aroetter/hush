@@ -248,7 +248,7 @@ test('subagent indicators stop on completion and disconnect', async () => {
   const app = render(<App session={session} version="test" onExit={() => {}}/>);
   try {
     await settle();
-    assert.match(app.lastFrame()!, /[|/\\-] Codex · Agents working · 1 agent active/);
+    assert.match(app.lastFrame()!, /[|/\\-] Codex · 1 agent active · Agents working/);
     assert.doesNotMatch(app.lastFrame()!, /\/root\/check/);
     item(rpc, {type: 'subAgentActivity', id: 'child-end', agentThreadId: 'child', agentPath: '/root/check', kind: 'completed'});
     await settle();
@@ -291,7 +291,7 @@ test('one status row summarizes agents and Details makes expansion explicit', as
   const app = render(<App session={session} version="test" onExit={() => {}}/>);
   try {
     await settle();
-    assert.match(app.lastFrame()!, /Codex · Working · 4 agents active/);
+    assert.match(app.lastFrame()!, /Codex · 4 agents active · Working/);
     assert.match(app.lastFrame()!, /▸ Details · Ctrl\+O to expand/);
     assert.doesNotMatch(app.lastFrame()!, /\/root\/worker|changed files|commands|notice\(s\)/);
     app.stdin.write('\x0f'); await settle();

@@ -67,7 +67,7 @@ export function activityStatus(state: State): {text: string; running: boolean; w
     : state.sending && !state.activeTurn ? 'Starting…'
     : progress ? `${current.text === 'Thinking' ? 'Thinking' : 'Working'}: ${progress.text}`
     : rootRunning ? (root?.text === 'Ready' || !root ? 'Working' : root.text) : children ? 'Agents working' : 'Ready';
-  return {text: text + (children ? ` · ${children} agent${children === 1 ? '' : 's'} active` : ''), running, waiting};
+  return {text: (children ? `${children} agent${children === 1 ? '' : 's'} active · ` : '') + text, running, waiting};
 }
 
 /** Include complete shortcut hints in priority order, without cutting one in half. */
