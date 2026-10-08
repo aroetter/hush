@@ -86,8 +86,8 @@ export function App({session, version, onExit}: {session: Session; version: stri
       await session.loadHistory();
       if (state.threadId !== threadId) return;
       const firstExisting = state.items.findIndex(item => previousItems.has(item));
-      const prefix = conversationLines({...state, items: state.items.slice(0, Math.max(0, firstExisting))}, latestWidth.current);
-      const added = prefix.length ? prefix.length + 1 : 0;
+      const suffix = {...state, items: state.items.slice(Math.max(0, firstExisting))};
+      const added = conversationLines(state, latestWidth.current).length - conversationLines(suffix, latestWidth.current).length;
       // Keep the same message in view when older messages are inserted above it.
       setChatOffset(offset => offset === null ? null : offset + added);
     } catch (error) {session.alert((error as Error).message);}
