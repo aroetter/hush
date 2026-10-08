@@ -83,3 +83,19 @@ test('latest active-agent commentary contributes to the single status row', asyn
   rpc.event('turn/completed', {threadId: 'child', turn: {id: 'child-work', status: 'completed'}});
   assert.equal(activityStatus(session.state).text, 'Ready');
 });
+
+test('speaker labels change only with speakers, preserving message boundaries and plans', async () => {
+  const {conversation, conversationLines} = await import('../src/view.js');
+  const {Chalk} = await import('chalk');
+  const {rpc, session} = await ready();
+  item(rpc, agent('first', 'First reply', 'commentary'));
+  item(rpc, {type: 'commandExecution', id: 'cmd', command: 'hidden', cwd: '/p', status: 'completed', exitCode: 0});
+  item(rpc, agent('child', 'Hidden child'), true, 'child');
+  item(rpc, agent('second', 'Second reply'));
+  item(rpc, {type: 'plan', id: 'plan', text: 'Next steps'});
+  for (const id of ['one', 'two']) item(rpc, {type: 'userMessage', id, content: [{type: 'text', text: id}]});
+  item(rpc, agent('last', 'Last reply'));
+  const expected = 'Codex\nFirst reply\n\nSecond reply\n\nPlan\nNext steps\n\nYou\none\n\ntwo\n\nCodex\nLast reply';
+  assert.equal(conversation(session.state), expected);
+  assert.equal(conversationLines(session.state, 80, new Chalk({level: 0})).join('\n'), expected);
+});

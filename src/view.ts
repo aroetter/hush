@@ -6,24 +6,26 @@ import stringWidth from 'string-width';
 import {markdown} from './markdown.js';
 import type {State, Item} from './session.js';
 
-function messages(state: State): string[] {
-  return state.items.filter(item => item.threadId === state.threadId).flatMap(({value: v, complete}) => {
-    if (v.type === 'userMessage') return [`You\n${v.content.map(input => input.type === 'text' ? input.text : `[${input.type}]`).join('\n')}`];
+function messages(state: State): {role: 'You' | 'Codex'; body: string}[] {
+  return state.items.filter(item => item.threadId === state.threadId).flatMap<{role: 'You' | 'Codex'; body: string}>(({value: v, complete}) => {
+    if (v.type === 'userMessage') return [{role: 'You', body: v.content.map(input => input.type === 'text' ? input.text : `[${input.type}]`).join('\n')}];
     if (v.type === 'agentMessage') {
-      return [`Codex\n${v.text}${v.questions?.length ? '\n' + v.questions.map(q => q.title + (q.options?.length ? '\n' + q.options.join(' · ') : '')).join('\n') : ''}`];
+      return [{role: 'Codex', body: `${v.text}${v.questions?.length ? '\n' + v.questions.map(q => q.title + (q.options?.length ? '\n' + q.options.join(' · ') : '')).join('\n') : ''}`}];
     }
-    if (v.type === 'plan' && complete) return [`Codex plan\n${v.text}`];
+    if (v.type === 'plan' && complete) return [{role: 'Codex', body: `Plan\n${v.text}`}];
     return [];
   });
 }
-export function conversation(state: State): string {return messages(state).join('\n\n');}
+export function conversation(state: State): string {
+  const entries = messages(state);
+  return entries.map(({role, body}, index) => (entries[index - 1]?.role === role ? '' : `${role}\n`) + body).join('\n\n');
+}
 export function conversationLines(state: State, width: number, colors: ChalkInstance = chalk): string[] {
-  return messages(state).flatMap((message, index) => {
-    const split = message.indexOf('\n');
-    const role = message.slice(0, split);
-    const body = message.slice(split + 1);
+  const entries = messages(state);
+  return entries.flatMap(({role, body}, index) => {
     const user = role === 'You';
-    return [...(index ? [''] : []), (user ? colors.cyan : colors.white).bold(role),
+    const label = entries[index - 1]?.role === role ? [] : [(user ? colors.cyan : colors.white).bold(role)];
+    return [...(index ? [''] : []), ...label,
       ...(user ? lines(body, width).map(line => colors.cyan(line)) : markdown(body, width, colors))];
   });
 }

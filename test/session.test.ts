@@ -110,7 +110,7 @@ test('resume pages history in order, loads omitted items, and applies cwd/model/
   await session.start();
   assert.equal(session.state.phase, 'ready');
   await session.loadHistory();
-  assert.equal(conversation(session.state), 'Codex\nOlder\n\nCodex\nRecent A\n\nCodex\nRecent B');
+  assert.equal(conversation(session.state), 'Codex\nOlder\n\nRecent A\n\nRecent B');
   assert.deepEqual(rpc.calls.find(c => c.method === 'thread/resume')?.params, {cwd: '/new', model: 'new-model', config: {x: true}, threadId: 'saved', excludeTurns: true});
 });
 test('latest resume selects by updated time and directory, including all providers', async () => {
@@ -172,7 +172,7 @@ test('live events arriving during older history loading are not lost', async () 
     return {};
   };
   await session.loadHistory();
-  assert.equal(conversation(session.state), 'Codex\nOld answer\n\nCodex\nRecent\n\nCodex\nLive answer');
+  assert.equal(conversation(session.state), 'Codex\nOld answer\n\nRecent\n\nLive answer');
 });
 test('repeated history cursors fail visibly rather than loop', async () => {
   const {rpc, session} = await ready();
