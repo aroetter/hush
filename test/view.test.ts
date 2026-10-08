@@ -69,13 +69,13 @@ test('latest active-agent commentary contributes to the single status row', asyn
   item(rpc, agent('root-progress', 'Reviewing the patch', 'commentary'));
   rpc.event('turn/started', {threadId: 'child', turn: {id: 'child-work'}});
   item(rpc, agent('child-progress', 'Testing mobile layout', 'commentary'), true, 'child', 'child-work');
-  assert.equal(activityStatus(session.state).text, 'Working: Testing mobile layout · 1 agent active');
+  assert.equal(activityStatus(session.state).text, '1 agent active · Working: Testing mobile layout');
   item(rpc, {type: 'reasoning', id: 'reason', summary: [], content: []}, true, 'child', 'child-work');
-  assert.equal(activityStatus(session.state).text, 'Thinking: Testing mobile layout · 1 agent active');
+  assert.equal(activityStatus(session.state).text, '1 agent active · Thinking: Testing mobile layout');
   item(rpc, agent('new-root', 'Checking the final results', 'commentary'));
-  assert.equal(activityStatus(session.state).text, 'Working: Checking the final results · 1 agent active');
+  assert.equal(activityStatus(session.state).text, '1 agent active · Working: Checking the final results');
   rpc.event('turn/completed', {threadId: 'root', turn: {id: 'work', status: 'completed'}});
-  assert.equal(activityStatus(session.state).text, 'Thinking: Testing mobile layout · 1 agent active');
+  assert.equal(activityStatus(session.state).text, '1 agent active · Thinking: Testing mobile layout');
   rpc.ask(91, 'item/commandExecution/requestApproval', {threadId: 'child', command: 'check', availableDecisions: ['accept', 'decline']});
   assert.equal(activityStatus(session.state).text, 'Waiting for your input');
   assert.equal(activityStatus(session.state).running, false);
