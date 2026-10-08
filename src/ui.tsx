@@ -160,11 +160,14 @@ export function App({session, version, onExit}: {session: Session; version: stri
     else if (/^\/rename(?:\s|$)/.test(value.trim())) void safeRun(async () => {await session.rename(value.trim().slice(7)); setDraft('');});
     else void session.send(value).then(sent => {if (sent) setDraft('');});
   };
+  const scrollKeys = process.platform === 'darwin' ? 'Fn+↑/↓' : 'PgUp/PgDn';
+  const scrollTarget = prompt ? 'Request' : expanded && focusDetails ? 'Details' : 'Conversation';
   const shortcuts = shortcutHints(width, state.phase === 'picking'
     ? ['↑/↓ select', 'Enter resume', ...(state.sessionsCursor ? ['n more sessions'] : [])]
     : state.phase === 'disconnected' ? ['Restart Hush to resume']
-    : [...(state.alerts.length ? ['Ctrl+L dismiss alert'] : []),
-      ...(expanded && !prompt ? ['Tab switch pane'] : []), 'PgUp/PgDn scroll',
+    : [`${scrollKeys} scroll ${scrollTarget}`,
+      ...(expanded && !prompt ? [`Tab → ${focusDetails ? 'Conversation' : 'Details'}`] : []),
+      ...(state.alerts.length ? ['Ctrl+L dismiss alert'] : []),
       'Alt+Enter newline']);
   const detailsHeading = `── Details · ${focusDetails ? 'scrolling here' : 'Tab to scroll here'} · Ctrl+O close `;
   const detailsDivider = detailsHeading + '─'.repeat(Math.max(0, width - detailsHeading.length));
@@ -181,7 +184,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
         </Text>)}
     </Box> : <Box height={chatHeight} overflow="hidden"><Text color="white">{viewport(chat, chatHeight, chatOffset)}</Text></Box>}
     {lowerHeight > 0 && <Box height={lowerHeight} flexDirection="column" overflow="hidden">
-      <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · PgUp/PgDn scroll` : detailsDivider}</Text>
+      <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · ${scrollKeys} scroll` : detailsDivider}</Text>
       <Text color="white">{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
     </Box>}
     <ActivityRow name="Codex" {...activity}/>
