@@ -1,5 +1,5 @@
 /** Render a bounded terminal screen with independent conversation and details scrolling. */
-import React, {useEffect, useReducer, useRef, useState} from 'react';
+import React, {useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
 import {clean, lines, conversationLines, details, activityStatus, shortcutHints} from './view.js';
 import {Editor} from './editor.js';
@@ -23,7 +23,7 @@ function viewport(content: string[], height: number, offset: number | null): str
 }
 
 export function App({session, version, onExit}: {session: Session; version: string; onExit: () => void}): React.JSX.Element {
-  const [, rerender] = useReducer(n => n + 1, 0);
+  const [revision, rerender] = useReducer(n => n + 1, 0);
   useEffect(() => {const change = () => rerender(); session.on('change', change); return () => {session.off('change', change);};}, [session]);
   const {columns, rows} = useWindowSize();
   const width = Math.max(10, columns - 1);
@@ -61,9 +61,11 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const space = Math.max(2, height - 1 - 1 - alertRows - 1 - 3 - 1);
   const lowerHeight = prompt || expanded ? Math.max(1, Math.floor(space / 2)) : 0;
   const chatHeight = space - lowerHeight;
-  const formatted = conversationLines(state, width);
+  // Session mutates in place; its change event invalidates formatting, typing does not.
+  const formatted = useMemo(() => conversationLines(state, width), [state, revision, width]);
   const chat = formatted.length ? formatted : lines(state.phase === 'connecting' ? 'Connecting to Codex…' : 'Send a message to begin.', width);
-  const technical = expanded && !prompt ? lines(details(state) || 'No details yet.', width) : [];
+  const showDetails = expanded && !prompt;
+  const technical = useMemo(() => showDetails ? lines(details(state) || 'No details yet.', width) : [], [state, revision, width, showDetails]);
   const promptText = prompt ? [prompt.title, prompt.body,
     question ? `Question ${questionIndex + 1}/${prompt.questions!.length}: ${question.question}` : '',
     ...(question?.options?.map((option, i) => `${i + 1}. ${option.label} — ${option.description}`) ?? []),

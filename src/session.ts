@@ -1,6 +1,7 @@
 /** Drive one conversation, retaining tool details separately from visible answers. */
 import {EventEmitter} from 'node:events';
 import {randomUUID} from 'node:crypto';
+import {basename} from 'node:path';
 import type {Options} from './args.js';
 import type {Connection, ServerMessage, Id} from './rpc.js';
 import type {Thread} from './protocol/v2/Thread.js';
@@ -11,7 +12,10 @@ import type {JsonValue} from './protocol/serde_json/JsonValue.js';
 import {makePrompt, type Prompt} from './approvals.js';
 
 export interface Item {threadId: string; turnId: string; value: ThreadItem; complete: boolean}
-export interface Activity {name: string; text: string; running: boolean}
+export interface Activity {
+  name: string; text: string; running: boolean;
+  progress?: {text: string; commentary: boolean; sequence: number};
+}
 export interface State {
   phase: 'connecting' | 'picking' | 'ready' | 'disconnected';
   threadId?: string;
@@ -42,6 +46,7 @@ export class Session extends EventEmitter {
   private stopped = false;
   private interruptPending = false;
   private failure?: Error;
+  private activitySequence = 0;
 
   constructor(readonly rpc: Connection, readonly options: Options) {
     super();
@@ -57,8 +62,7 @@ export class Session extends EventEmitter {
     });
     rpc.on('log', (text: string) => {
       this.detail('App-server log', `${this.state.details.get('App-server log') ?? ''}${text}`);
-      if (/\b(error|fatal|panic)\b/i.test(text)) this.alert('Codex logged an error; open details to inspect the app-server log.');
-      else this.changed();
+      this.changed();
     });
     rpc.on('fault', (error: Error) => this.disconnected(error));
   }
@@ -236,26 +240,42 @@ export class Session extends EventEmitter {
     const v = item.value;
     const old = this.state.activities.get(item.threadId);
     let text: string | undefined;
+    let progress: string | undefined;
+    const commentary = v.type === 'agentMessage' && v.phase === 'commentary';
+    if (commentary && v.text.trim()) progress = v.text;
     if (v.type === 'agentMessage') text = v.phase === 'commentary' ? v.text : 'Writing answer';
     if (v.type === 'reasoning') text = 'Thinking';
     if (v.type === 'commandExecution') {
       const action = v.commandActions?.[0];
+      if (action?.type === 'read') progress = `${item.complete ? 'Read' : 'Reading'} ${action.name}`;
+      if (action?.type === 'search') progress = `${item.complete ? 'Searched' : 'Searching'} ${action.path ?? 'files'}${action.query ? ` for ${action.query}` : ''}`;
+      if (action?.type === 'listFiles' && action.path) progress = `${item.complete ? 'Listed' : 'Listing'} ${action.path}`;
       text = item.complete ? 'Working' : action?.type === 'read' ? `Reading ${action.name}` : action?.type === 'search' ? 'Searching files' : 'Running command';
     }
-    if (v.type === 'fileChange') text = item.complete ? 'Working' : 'Editing files';
+    if (v.type === 'fileChange') {
+      text = item.complete ? 'Working' : 'Editing files';
+      if (v.changes.length) progress = `${item.complete ? 'File changes' : 'Editing'}: ${v.changes.map(change => basename(change.path)).join(', ')}`;
+    }
     if (v.type === 'webSearch') text = 'Searching the web';
-    if (v.type === 'mcpToolCall' || v.type === 'dynamicToolCall') text = item.complete ? 'Working' : `Using ${v.tool}`;
+    if (v.type === 'mcpToolCall' || v.type === 'dynamicToolCall') {
+      text = item.complete ? 'Working' : `Using ${v.tool}`;
+      progress = `${item.complete ? 'Tool finished' : 'Using'}: ${v.tool}`;
+    }
     if (v.type === 'contextCompaction') text = 'Compacting conversation';
     if (v.type === 'collabAgentToolCall') {
       text = 'Coordinating agents';
       for (const [id, agent] of Object.entries(v.agentsStates ?? {})) if (agent) {
-        this.state.activities.set(id, {name: this.state.activities.get(id)?.name ?? `Agent ${id.slice(0, 8)}`, text: agent.status, running: agent.status === 'running' || agent.status === 'pendingInit'});
+        this.state.activities.set(id, {...this.state.activities.get(id), name: this.state.activities.get(id)?.name ?? `Agent ${id.slice(0, 8)}`, text: agent.status, running: agent.status === 'running' || agent.status === 'pendingInit'});
         if (agent.message) this.detail(`Agent ${id}`, agent.message);
         if (agent.status === 'errored') this.alert(`Agent ${id.slice(0, 8)} failed. See details.`);
       }
     }
-    if (v.type === 'subAgentActivity') this.state.activities.set(v.agentThreadId, {name: v.agentPath, text: v.kind, running: v.kind === 'started' || v.kind === 'interacted'});
-    if (text) this.state.activities.set(item.threadId, {name: old?.name ?? `Agent ${item.threadId.slice(0, 8)}`, text, running: true});
+    if (v.type === 'subAgentActivity') this.state.activities.set(v.agentThreadId, {...this.state.activities.get(v.agentThreadId), name: v.agentPath, text: v.kind, running: v.kind === 'started' || v.kind === 'interacted'});
+    if (text) {
+      const update = progress && (commentary || !old?.progress?.commentary)
+        ? {text: progress, commentary, sequence: ++this.activitySequence} : old?.progress;
+      this.state.activities.set(item.threadId, {name: old?.name ?? `Agent ${item.threadId.slice(0, 8)}`, text, running: true, progress: update});
+    }
   }
 
   private notification(event: ServerMessage): void {
@@ -265,7 +285,7 @@ export class Session extends EventEmitter {
       if (t?.parentThreadId) this.state.activities.set(t.id, {name: t.agentNickname ?? t.agentRole ?? `Agent ${t.id.slice(0, 8)}`, text: t.status?.type ?? 'Starting', running: t.status?.type === 'active'});
     } else if (method === 'thread/status/changed') {
       const old = this.state.activities.get(p.threadId);
-      this.state.activities.set(p.threadId, {name: old?.name ?? 'Codex', text: p.status.activeFlags?.join(', ') || p.status.type, running: p.status.type === 'active' && !p.status.activeFlags?.length});
+      this.state.activities.set(p.threadId, {...old, name: old?.name ?? 'Codex', text: p.status.activeFlags?.join(', ') || p.status.type, running: p.status.type === 'active' && !p.status.activeFlags?.length});
       if (p.status.type === 'systemError') this.alert('Codex reported a session error. See details.');
     } else if (method === 'thread/name/updated') {
       if (p.threadId === this.state.threadId) this.state.name = p.threadName ?? undefined;

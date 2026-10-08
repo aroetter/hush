@@ -89,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix="hush-terminal-") as temp:
         terminal.send("\x0f")
         terminal.send("wait")
         terminal.send("\r")
-        terminal.wait("command")
+        terminal.wait("Working: Inspecting files")
         terminal.send("\x03")
         terminal.wait("interrupted")
         fcntl.ioctl(terminal.master, termios.TIOCSWINSZ, struct.pack("HHHH", 18, 50, 0, 0))

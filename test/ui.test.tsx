@@ -406,3 +406,53 @@ test('Details opens at the failed command, not diagnostic notices, and follows a
     assert.doesNotMatch(app.lastFrame()!, /Approval 9|Notice 10/);
   } finally {app.unmount();}
 });
+
+test('meaningful progress updates overwrite one row without entering conversation', async () => {
+  const {rpc, session} = await ready();
+  rpc.event('turn/started', {threadId: 'root', turn: {id: 'work'}});
+  item(rpc, agent('progress', 'Checking playback\non mobile screens', 'commentary'));
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    assert.equal(app.lastFrame()!.split('\n').filter(line => line.includes('Checking playback')).length, 1);
+    assert.match(app.lastFrame()!, /Working: Checking playback on mobile screens/);
+    item(rpc, {type: 'reasoning', id: 'r', summary: [], content: []}); await settle();
+    assert.match(app.lastFrame()!, /Thinking: Checking playback on mobile screens/);
+    item(rpc, agent('next', 'Running the final checks', 'commentary')); await settle();
+    assert.doesNotMatch(app.lastFrame()!, /Checking playback/);
+    assert.match(app.lastFrame()!, /Working: Running the final checks/);
+    app.stdin.write('\x0f'); await settle();
+    app.stdin.write('\x1b[5~'); await settle();
+    assert.match(app.lastFrame()!, /Checking playback/);
+  } finally {app.unmount();}
+});
+
+test('editing and scrolling reuse formatted history; session changes refresh it', async () => {
+  const {rpc, session} = await ready();
+  item(rpc, agent('answer', 'Existing answer'));
+  item(rpc, {type: 'commandExecution', id: 'cmd', command: 'example', cwd: '/p', status: 'completed', exitCode: 0, aggregatedOutput: 'Existing output'});
+  let reads = 0;
+  const answer = session.state.items.find(entry => entry.value.id === 'answer')!.value;
+  const command = session.state.items.find(entry => entry.value.id === 'cmd')!.value;
+  Object.defineProperty(answer, 'text', {get: () => {reads++; return 'Existing answer';}, configurable: true});
+  Object.defineProperty(command, 'aggregatedOutput', {get: () => {reads++; return 'Existing output';}, configurable: true});
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    app.stdin.write('\x0f'); await settle();
+    assert.match(app.lastFrame()!, /Existing output/);
+    reads = 0;
+    for (const key of ['h', 'i', '\x1b[D', '\x1b[5~']) {
+      app.stdin.write(key); await settle();
+    }
+    assert.equal(reads, 0, 'draft edits and scrolling must not reformat session history');
+    assert.match(app.lastFrame()!, /h▏i/);
+    item(rpc, agent('new-answer', 'New answer'));
+    item(rpc, {...command, aggregatedOutput: 'New output'});
+    await settle();
+    assert.ok(reads > 0);
+    assert.match(app.lastFrame()!, /New answer/);
+    app.stdin.write('\x1b[6~'); await settle();
+    assert.match(app.lastFrame()!, /New output/);
+  } finally {app.unmount();}
+});

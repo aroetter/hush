@@ -71,12 +71,14 @@ Input uses standard [readline shortcuts](https://nodejs.org/api/readline.html#tt
 ## Conversation and details
 
 Your messages are cyan; replies render Markdown. A spinner shows active work;
-`?` means input is needed. Set `NO_COLOR=1` to disable colors.
+`?` means input is needed. The status line keeps the latest progress update from
+an active agent, prefixed with “Working:” or “Thinking:”. Specific tool activity
+is the fallback when no progress update is available. Set `NO_COLOR=1` to disable colors.
 
 Approvals and questions appear even with details closed. Follow their numbered
 choices or text instructions; Hush never answers approvals for you.
 
-Individual command/tool failures and automatic retries stay in details; a failed
+Diagnostic logs, individual command/tool failures, and automatic retries stay in details; a failed
 attempt does not mean the task failed. Details opens at the latest failed tool
 from the current turn. Failed turns, connection problems, and requests needing
 your input remain visible. Ctrl+L dismisses alerts.
