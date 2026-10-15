@@ -66,6 +66,9 @@ try {
     await rpc.request('turn/start', {threadId: created.thread.id, input: [{type: 'text', text: 'Say hello.', text_elements: []}]});
     const turn = await completed;
     assert.equal(turn.status, 'completed', JSON.stringify(turn.error));
+    const snapshot = await rpc.request('thread/read', {threadId: created.thread.id, includeTurns: false});
+    assert.equal(snapshot.thread.status.type, 'idle');
+    assert.deepEqual(snapshot.thread.turns, []);
     await rpc.request('thread/name/set', {threadId: created.thread.id, name: 'Hush smoke saved'});
     await rpc.close();
     rpc = new RpcClient('codex', args, home, {...process.env, CODEX_HOME: home}, 30_000);

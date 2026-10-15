@@ -10,6 +10,7 @@ export class FakeConnection extends EventEmitter implements Connection {
   handler: (method: string, params: any) => Promise<any> = async method => {
     if (method === 'initialize') return {};
     if (method === 'thread/start' || method === 'thread/resume') return {thread: {id: 'root', turns: []}, model: 'test-model'};
+    if (method === 'thread/read') return {thread: {id: 'child', status: {type: 'active', activeFlags: []}}};
     if (method === 'thread/list') return {data: [], nextCursor: null};
     if (method === 'thread/turns/list') return {data: [], nextCursor: null};
     if (method === 'turn/start') return {turn: {id: 'turn-1'}};

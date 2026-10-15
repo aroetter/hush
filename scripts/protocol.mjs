@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 
 const roots = ['InitializeParams', 'InitializeResponse',
-  ...['ThreadStartParams', 'ThreadStartResponse', 'ThreadSetNameParams', 'ThreadSetNameResponse', 'ThreadResumeParams', 'ThreadResumeResponse',
+  ...['ThreadStartParams', 'ThreadStartResponse', 'ThreadReadParams', 'ThreadReadResponse', 'ThreadSetNameParams', 'ThreadSetNameResponse', 'ThreadResumeParams', 'ThreadResumeResponse',
     'ThreadListParams', 'ThreadListResponse', 'ThreadTurnsListParams', 'ThreadTurnsListResponse',
     'ThreadItemsListParams', 'ThreadItemsListResponse', 'TurnStartParams', 'TurnStartResponse',
     'TurnSteerParams', 'TurnSteerResponse', 'TurnInterruptParams',

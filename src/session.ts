@@ -13,7 +13,7 @@ import {makePrompt, type Prompt} from './approvals.js';
 
 export interface Item {threadId: string; turnId: string; value: ThreadItem; complete: boolean}
 export interface Activity {
-  name: string; text: string; running: boolean;
+  name: string; text: string; running: boolean; unverified?: boolean;
   progress?: {text: string; commentary: boolean; sequence: number};
 }
 export interface State {
@@ -47,6 +47,52 @@ export class Session extends EventEmitter {
   private interruptPending = false;
   private failure?: Error;
   private activitySequence = 0;
+  private agentRefresh?: NodeJS.Timeout;
+  private refreshingAgents = new Set<string>();
+
+  private trackAgent(id: string, refresh = true): void {
+    if (id === this.state.threadId || this.stopped || this.failure) return;
+    if (!this.agentRefresh) {
+      this.agentRefresh = setInterval(() => {
+        for (const [threadId, activity] of this.state.activities) {
+          if (threadId !== this.state.threadId && (activity.running || activity.unverified)) void this.refreshAgent(threadId);
+        }
+      }, 10_000);
+      this.agentRefresh.unref();
+    }
+    if (refresh) void this.refreshAgent(id);
+  }
+
+  private async refreshAgent(id: string): Promise<void> {
+    const before = this.state.activities.get(id);
+    if (!before || this.refreshingAgents.has(id) || this.stopped || this.failure) return;
+    this.refreshingAgents.add(id);
+    let expected = before;
+    const current = () => !this.stopped && !this.failure && this.state.activities.get(id) === expected;
+    const unknown = () => {
+      if (!current()) return;
+      expected = {...before, text: 'Status unknown', running: false, unverified: true};
+      this.state.activities.set(id, expected);
+      this.changed();
+    };
+    // Do not keep claiming activity while a status request is stalled.
+    const timeout = setTimeout(unknown, 5000);
+    timeout.unref();
+    try {
+      const {thread} = await this.rpc.request('thread/read', {threadId: id, includeTurns: false});
+      if (!current()) return; // A newer live event takes precedence over this snapshot.
+      const status = thread?.status;
+      if (!status || status.type === 'notLoaded') {unknown(); return;}
+      const running = status.type === 'active' && !status.activeFlags.length;
+      this.state.activities.set(id, {...before, running, unverified: false,
+        text: running ? before.unverified ? 'Working' : before.text : status.type === 'active' ? status.activeFlags.join(', ') : status.type,
+        progress: running ? before.progress : undefined});
+      this.changed();
+    } catch (error) {
+      if (current()) this.detail(`Agent status ${id}`, String(error));
+      unknown();
+    } finally {clearTimeout(timeout); this.refreshingAgents.delete(id);}
+  }
 
   constructor(readonly rpc: Connection, readonly options: Options) {
     super();
@@ -83,6 +129,7 @@ export class Session extends EventEmitter {
   private disconnected(error: Error): void {
     if (this.failure) return;
     this.failure = error;
+    clearInterval(this.agentRefresh);
     this.state.phase = 'disconnected';
     this.state.sending = false;
     this.state.prompts = [];
@@ -265,16 +312,23 @@ export class Session extends EventEmitter {
     if (v.type === 'collabAgentToolCall') {
       text = 'Coordinating agents';
       for (const [id, agent] of Object.entries(v.agentsStates ?? {})) if (agent) {
-        this.state.activities.set(id, {...this.state.activities.get(id), name: this.state.activities.get(id)?.name ?? `Agent ${id.slice(0, 8)}`, text: agent.status, running: agent.status === 'running' || agent.status === 'pendingInit'});
+        this.state.activities.set(id, {...this.state.activities.get(id), name: this.state.activities.get(id)?.name ?? `Agent ${id.slice(0, 8)}`, text: agent.status, unverified: false, running: agent.status === 'running' || agent.status === 'pendingInit'});
+        if (agent.status === 'running' || agent.status === 'pendingInit') this.trackAgent(id, false);
         if (agent.message) this.detail(`Agent ${id}`, agent.message);
         if (agent.status === 'errored') this.alert(`Agent ${id.slice(0, 8)} failed. See details.`);
       }
     }
-    if (v.type === 'subAgentActivity') this.state.activities.set(v.agentThreadId, {...this.state.activities.get(v.agentThreadId), name: v.agentPath, text: v.kind, running: v.kind === 'started' || v.kind === 'interacted'});
+    if (v.type === 'subAgentActivity') {
+      const finished = v.kind === 'completed' || v.kind === 'interrupted';
+      this.state.activities.set(v.agentThreadId, {name: v.agentPath,
+        text: finished ? v.kind : 'Checking status', running: false, unverified: !finished});
+      if (!finished) this.trackAgent(v.agentThreadId);
+    }
     if (text) {
       const update = progress && (commentary || !old?.progress?.commentary)
         ? {text: progress, commentary, sequence: ++this.activitySequence} : old?.progress;
-      this.state.activities.set(item.threadId, {name: old?.name ?? `Agent ${item.threadId.slice(0, 8)}`, text, running: true, progress: update});
+      this.state.activities.set(item.threadId, {name: old?.name ?? `Agent ${item.threadId.slice(0, 8)}`, text, running: !this.completedTurns.has(item.turnId), progress: update});
+      if (item.threadId !== this.state.threadId) this.trackAgent(item.threadId, false);
     }
   }
 
@@ -282,10 +336,14 @@ export class Session extends EventEmitter {
     const {method, params: p} = event;
     if (method === 'thread/started') {
       const t = p.thread;
-      if (t?.parentThreadId) this.state.activities.set(t.id, {name: t.agentNickname ?? t.agentRole ?? `Agent ${t.id.slice(0, 8)}`, text: t.status?.type ?? 'Starting', running: t.status?.type === 'active'});
+      if (t?.parentThreadId) {
+        this.state.activities.set(t.id, {name: t.agentNickname ?? t.agentRole ?? `Agent ${t.id.slice(0, 8)}`, text: t.status?.type ?? 'Starting', running: t.status?.type === 'active' && !t.status.activeFlags?.length});
+        this.trackAgent(t.id, false);
+      }
     } else if (method === 'thread/status/changed') {
       const old = this.state.activities.get(p.threadId);
-      this.state.activities.set(p.threadId, {...old, name: old?.name ?? 'Codex', text: p.status.activeFlags?.join(', ') || p.status.type, running: p.status.type === 'active' && !p.status.activeFlags?.length});
+      this.state.activities.set(p.threadId, {...old, name: old?.name ?? 'Codex', text: p.status.activeFlags?.join(', ') || p.status.type, running: p.status.type === 'active' && !p.status.activeFlags?.length, unverified: p.status.type === 'notLoaded'});
+      if (p.threadId !== this.state.threadId) this.trackAgent(p.threadId, false);
       if (p.status.type === 'systemError') this.alert('Codex reported a session error. See details.');
     } else if (method === 'thread/name/updated') {
       if (p.threadId === this.state.threadId) this.state.name = p.threadName ?? undefined;
@@ -294,6 +352,7 @@ export class Session extends EventEmitter {
       this.state.model = p.threadSettings?.model ?? this.state.model;
     } else if (method === 'turn/started') {
       this.state.activities.set(p.threadId, {name: this.state.activities.get(p.threadId)?.name ?? 'Codex', text: 'Working', running: true});
+      if (p.threadId !== this.state.threadId) this.trackAgent(p.threadId, false);
       if (p.threadId === this.state.threadId) {
         this.state.failedItem = undefined;
         this.state.activeTurn = p.turn.id;
@@ -309,6 +368,9 @@ export class Session extends EventEmitter {
       }
       this.state.prompts = this.state.prompts.filter(prompt => !(prompt.threadId === p.threadId && prompt.turnId === p.turn.id));
       this.state.activities.set(p.threadId, {name: this.state.activities.get(p.threadId)?.name ?? 'Codex', text: p.turn.status === 'completed' ? 'Ready' : p.turn.status, running: false});
+      if (p.threadId === this.state.threadId) {
+        for (const [id, activity] of this.state.activities) if (id !== p.threadId && (activity.running || activity.unverified)) this.trackAgent(id);
+      }
       if (p.turn.error || p.turn.status === 'failed') this.alert(p.turn.error?.message ?? 'Turn failed.');
       if (p.turn.status === 'interrupted') this.alert('Turn interrupted. You can send another message.');
     } else if (method === 'item/started' || method === 'item/completed') {
@@ -429,6 +491,7 @@ export class Session extends EventEmitter {
   async stop(): Promise<void> {
     if (this.stopped) return;
     this.stopped = true;
+    clearInterval(this.agentRefresh);
     // Give Codex a chance to persist interruption before terminating its private process.
     let timer: NodeJS.Timeout | undefined;
     try {

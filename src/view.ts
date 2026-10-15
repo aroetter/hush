@@ -58,6 +58,7 @@ export function counts(state: State): string {
 export function activityStatus(state: State): {text: string; running: boolean; waiting: boolean} {
   if (state.phase !== 'ready') return {text: state.phase === 'connecting' ? 'Connecting…' : state.phase === 'picking' ? 'Choose a session' : 'Disconnected', running: false, waiting: false};
   const children = [...state.activities].filter(([id, activity]) => id !== state.threadId && activity.running && !state.prompts.some(prompt => prompt.threadId === id)).length;
+  const unknown = [...state.activities].filter(([id, activity]) => id !== state.threadId && activity.unverified).length;
   const rootRunning = !!(state.activeTurn || state.sending || state.interrupting);
   const waiting = state.prompts.length > 0;
   const running = !waiting && (rootRunning || children > 0);
@@ -73,7 +74,7 @@ export function activityStatus(state: State): {text: string; running: boolean; w
     : state.sending && !state.activeTurn ? 'Starting…'
     : progress ? `${current.text === 'Thinking' ? 'Thinking' : 'Working'}: ${progress.text}`
     : rootRunning ? (root?.text === 'Ready' || !root ? 'Working' : root.text) : children ? 'Agents working' : 'Ready';
-  return {text: (children ? `${children} agent${children === 1 ? '' : 's'} active · ` : '') + text, running, waiting};
+  return {text: (children ? `${children} agent${children === 1 ? '' : 's'} active · ` : '') + (unknown ? `${unknown} agent${unknown === 1 ? '' : 's'} status unknown · ` : '') + text, running, waiting};
 }
 
 /** Include complete shortcut hints in priority order, without cutting one in half. */
