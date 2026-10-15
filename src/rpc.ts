@@ -23,11 +23,15 @@ import type {TurnSteerParams} from './protocol/v2/TurnSteerParams.js';
 import type {TurnSteerResponse} from './protocol/v2/TurnSteerResponse.js';
 import type {TurnInterruptParams} from './protocol/v2/TurnInterruptParams.js';
 
+import type {ThreadReadParams} from './protocol/v2/ThreadReadParams.js';
+import type {ThreadReadResponse} from './protocol/v2/ThreadReadResponse.js';
+
 export type Id = string | number;
 export interface ServerMessage {method: string; params: Record<string, any>; id?: Id}
 interface Methods {
   initialize: [InitializeParams, InitializeResponse];
   'thread/name/set': [ThreadSetNameParams, ThreadSetNameResponse];
+  'thread/read': [ThreadReadParams, ThreadReadResponse];
   'thread/start': [ThreadStartParams, ThreadStartResponse];
   'thread/resume': [ThreadResumeParams, ThreadResumeResponse];
   'thread/list': [ThreadListParams, ThreadListResponse];
@@ -112,6 +116,7 @@ export class RpcClient extends EventEmitter implements Connection {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
+        if (method === 'thread/read') {reject(new Error('Agent status read timed out.')); return;}
         reject(new Error(`${method} timed out. The outcome is unknown; no request was retried. Restart and resume before continuing.`));
         this.emit('fault', new Error(`${method} timed out; connection closed to avoid duplicate work.`));
         void this.close();

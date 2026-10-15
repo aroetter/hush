@@ -18,7 +18,7 @@ lines.on('line', line => {
   if (message.id === undefined) return;
   if (mode === 'malformed') {process.stdout.write('not-json\n'); return;}
   if (mode === 'exit') {process.exit(7);}
-  if (mode === 'timeout') return;
+  if (mode === 'timeout' || mode === 'status-timeout' && message.method === 'thread/read') return;
   if (mode === 'echo') {
     process.stderr.write('diagnostic log\n');
     send({id: 'approval', method: 'approve/test', params: {command: 'demo'}});

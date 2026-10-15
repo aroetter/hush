@@ -53,3 +53,14 @@ test('missing executable reports an actionable error', async () => {
   try {await assert.rejects(rpc.request('initialize', {} as any), /ENOENT/);}
   finally {await rpc.close();}
 });
+
+test('a background status timeout does not close the session or interrupt work', async () => {
+  const rpc = peer('status-timeout', 100);
+  let faults = 0;
+  rpc.on('fault', () => {faults++;});
+  try {
+    await assert.rejects(rpc.request('thread/read', {threadId: 'child', includeTurns: false}), /status read timed out/);
+    assert.equal(faults, 0);
+    assert.deepEqual(await rpc.request('initialize', {} as any), {});
+  } finally {await rpc.close();}
+});

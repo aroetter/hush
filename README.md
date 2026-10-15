@@ -81,7 +81,8 @@ Reasoning, commands, diffs, logs, and subagent messages stay in Details.
 Your messages are cyan; replies render Markdown. A spinner shows active work;
 `?` means input is needed. The status line keeps the latest progress update from
 an active agent, prefixed with “Working:” or “Thinking:”. Specific tool activity
-is the fallback when no progress update is available. Set `NO_COLOR=1` to disable colors.
+is the fallback when no progress update is available. Active-agent counts are
+checked against Codex every 10 seconds; failed checks show “status unknown.” Set `NO_COLOR=1` to disable colors.
 
 Blocking questions and approvals open automatically. Asynchronous questions keep a
 visible count: Ctrl+Q opens them, then enter an option number or your own answer.
