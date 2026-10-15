@@ -63,6 +63,7 @@ Type `/rename My session name` in the conversation to name the session.
 | Page Up / Page Down (Mac: Fn+↑ / Fn+↓) | Scroll the selected section; reaching the top of Conversation loads older messages |
 | Tab | Switch scrolling between conversation and expanded details |
 | Ctrl+L | Dismiss alerts |
+| Ctrl+Q | Review queued questions; Esc returns to conversation |
 
 The footer names the section being scrolled. With Details closed, scrolling applies
 to Conversation. Up/Down alone navigate input history.
@@ -82,8 +83,11 @@ Your messages are cyan; replies render Markdown. A spinner shows active work;
 an active agent, prefixed with “Working:” or “Thinking:”. Specific tool activity
 is the fallback when no progress update is available. Set `NO_COLOR=1` to disable colors.
 
-Approvals and questions appear even with details closed. Follow their numbered
-choices or text instructions; Hush never answers approvals for you.
+Blocking questions and approvals open automatically. Asynchronous questions keep a
+visible count: Ctrl+Q opens them, then enter an option number or your own answer.
+Answers are sent as ordinary messages with the question quoted; Hush never chooses
+for you. Reply through this panel to clear its count. Ordinary chat replies are not
+automatically treated as answers or consent. Saved questions are restored with loaded history.
 
 Diagnostic logs, individual command/tool failures, and automatic retries stay in details; a failed
 attempt does not mean the task failed. Details opens at the latest failed tool

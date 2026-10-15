@@ -6,14 +6,18 @@ import stringWidth from 'string-width';
 import {markdown} from './markdown.js';
 import type {State, Item} from './session.js';
 
+export function message({value: v, complete}: Item): {role: 'You' | 'Codex'; body: string} | undefined {
+  if (v.type === 'userMessage') return {role: 'You', body: v.content.map(input => input.type === 'text' ? input.text : `[${input.type}]`).join('\n')};
+  if (v.type === 'agentMessage') {
+    // Async question messages already contain their titles/options in Codex's text.
+    return {role: 'Codex', body: v.text || (v.questions ?? []).map(q => [q.title, ...(q.options ?? [])].join('\n')).join('\n\n')};
+  }
+  if (v.type === 'plan' && complete) return {role: 'Codex', body: `Plan\n${v.text}`};
+}
 function messages(state: State): {role: 'You' | 'Codex'; body: string}[] {
-  return state.items.filter(item => item.threadId === state.threadId).flatMap<{role: 'You' | 'Codex'; body: string}>(({value: v, complete}) => {
-    if (v.type === 'userMessage') return [{role: 'You', body: v.content.map(input => input.type === 'text' ? input.text : `[${input.type}]`).join('\n')}];
-    if (v.type === 'agentMessage') {
-      return [{role: 'Codex', body: `${v.text}${v.questions?.length ? '\n' + v.questions.map(q => q.title + (q.options?.length ? '\n' + q.options.join(' · ') : '')).join('\n') : ''}`}];
-    }
-    if (v.type === 'plan' && complete) return [{role: 'Codex', body: `Plan\n${v.text}`}];
-    return [];
+  return state.items.filter(item => item.threadId === state.threadId).flatMap(item => {
+    const entry = message(item);
+    return entry ? [entry] : [];
   });
 }
 export function conversation(state: State): string {

@@ -1,8 +1,10 @@
 /** Render a bounded terminal screen with independent conversation and details scrolling. */
 import React, {useEffect, useMemo, useReducer, useRef, useState} from 'react';
 import {Box, Text, useInput, useWindowSize} from 'ink';
-import {clean, lines, conversationLines, details, activityStatus, shortcutHints} from './view.js';
+import {clean, lines, activityStatus, shortcutHints} from './view.js';
 import {Editor} from './editor.js';
+import {pendingQuestions, questionReply} from './questions.js';
+import {HistoryFormatter, type LineView} from './history.js';
 import type {Session} from './session.js';
 
 /** Animate only this small row, without reformatting conversation or details on each tick. */
@@ -17,7 +19,7 @@ function ActivityRow({name, text, running, waiting}: {name: string; text: string
 }
 
 /** A viewport offset is a line index, or null to follow the latest output. */
-function viewport(content: string[], height: number, offset: number | null): string {
+function viewport(content: LineView, height: number, offset: number | null): string {
   const start = offset === null ? Math.max(0, content.length - height) : Math.min(offset, Math.max(0, content.length - 1));
   return content.slice(start, start + height).join('\n');
 }
@@ -32,6 +34,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const latestWidth = useRef(width);
   latestWidth.current = width;
   const state = session.state;
+  const formatter = useMemo(() => new HistoryFormatter(), [session]);
   const [expanded, setExpanded] = useState(false);
   const [focusDetails, setFocusDetails] = useState(false);
   const [chatOffset, setChatOffset] = useState<number | null>(null);
@@ -48,7 +51,16 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const [answers, setAnswers] = useState<Record<string, {answers: string[]}>>({});
   const [selection, setSelection] = useState(0);
   const [busy, setBusy] = useState(false);
-  const prompt = state.prompts[0];
+  const queuedQuestions = useMemo(() => pendingQuestions(state), [state, revision]);
+  const [showQuestions, setShowQuestions] = useState(false);
+  const [answeredQuestions, setAnsweredQuestions] = useState<Set<string>>(() => new Set());
+  const pending = queuedQuestions.filter(question => !answeredQuestions.has(question.id));
+  const asyncQuestion = !state.prompts.length && showQuestions ? pending[0] : undefined;
+  const prompt = state.prompts[0] ?? (asyncQuestion ? {
+    id: asyncQuestion.id, revision: 0, title: 'Question from Codex', body: '', choices: [], form: false,
+    questions: [{id: asyncQuestion.id, header: '', question: asyncQuestion.title, isOther: true, isSecret: false,
+      options: asyncQuestion.options.map(label => ({label, description: ''}))}],
+  } : undefined);
   const promptKey = prompt ? `${prompt.id}:${prompt.revision}` : '';
   const [answerPrompt, setAnswerPrompt] = useState(promptKey);
   if (answerPrompt !== promptKey) {
@@ -58,14 +70,14 @@ export function App({session, version, onExit}: {session: Session; version: stri
   const question = prompt?.questions?.[questionIndex];
   const activity = activityStatus(state);
   const alertRows = state.alerts.length ? 1 : 0;
-  const space = Math.max(2, height - 1 - 1 - alertRows - 1 - 3 - 1);
+  const space = Math.max(2, height - 1 - 1 - alertRows - 1 - 3 - 1 - (pending.length ? 1 : 0));
   const lowerHeight = prompt || expanded ? Math.max(1, Math.floor(space / 2)) : 0;
   const chatHeight = space - lowerHeight;
   // Session mutates in place; its change event invalidates formatting, typing does not.
-  const formatted = useMemo(() => conversationLines(state, width), [state, revision, width]);
+  const formatted = useMemo(() => formatter.conversation(state, width), [state, revision, width]);
   const chat = formatted.length ? formatted : lines(state.phase === 'connecting' ? 'Connecting to Codex…' : 'Send a message to begin.', width);
   const showDetails = expanded && !prompt;
-  const technical = useMemo(() => showDetails ? lines(details(state) || 'No details yet.', width) : [], [state, revision, width, showDetails]);
+  const technical = useMemo(() => showDetails ? formatter.details(state, width) : [], [state, revision, width, showDetails]);
   const promptText = prompt ? [prompt.title, prompt.body,
     question ? `Question ${questionIndex + 1}/${prompt.questions!.length}: ${question.question}` : '',
     ...(question?.options?.map((option, i) => `${i + 1}. ${option.label} — ${option.description}`) ?? []),
@@ -87,7 +99,7 @@ export function App({session, version, onExit}: {session: Session; version: stri
       if (state.threadId !== threadId) return;
       const firstExisting = state.items.findIndex(item => previousItems.has(item));
       const suffix = {...state, items: state.items.slice(Math.max(0, firstExisting))};
-      const added = conversationLines(state, latestWidth.current).length - conversationLines(suffix, latestWidth.current).length;
+      const added = formatter.conversation(state, latestWidth.current).length - formatter.conversation(suffix, latestWidth.current).length;
       // Keep the same message in view when older messages are inserted above it.
       setChatOffset(offset => offset === null ? null : offset + added);
     } catch (error) {session.alert((error as Error).message);}
@@ -110,6 +122,8 @@ export function App({session, version, onExit}: {session: Session; version: stri
     }
   };
   useInput((input, key) => {
+    if (key.ctrl && input === 'q' && !state.prompts.length) {setShowQuestions(!showQuestions); return;}
+    if (key.escape && asyncQuestion) {setShowQuestions(false); return;}
     if (key.ctrl && input === 'd') {onExit(); return;}
     if (key.ctrl && input === 'c') {
       if (state.phase === 'connecting' || state.phase === 'disconnected') onExit();
@@ -135,6 +149,16 @@ export function App({session, version, onExit}: {session: Session; version: stri
 
   const submitPrompt = (value: string) => {
     if (!prompt) return;
+    if (asyncQuestion) {
+      const selected = /^\d+$/.test(value.trim()) ? asyncQuestion.options[Number(value.trim()) - 1] : undefined;
+      void safeRun(async () => {
+        if (await session.send(questionReply(asyncQuestion, selected ?? value))) {
+          setAnsweredQuestions(previous => new Set([...previous, asyncQuestion.id]));
+          setAnswer('');
+        }
+      });
+      return;
+    }
     try {
       if (question) {
         const index = /^\d+$/.test(value.trim()) ? Number(value.trim()) - 1 : -1;
@@ -184,10 +208,11 @@ export function App({session, version, onExit}: {session: Session; version: stri
         </Text>)}
     </Box> : <Box height={chatHeight} overflow="hidden"><Text color="white">{viewport(chat, chatHeight, chatOffset)}</Text></Box>}
     {lowerHeight > 0 && <Box height={lowerHeight} flexDirection="column" overflow="hidden">
-      <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? `Request · ${state.prompts.length} pending · ${scrollKeys} scroll` : detailsDivider}</Text>
+      <Text color={prompt ? 'yellow' : 'cyan'} wrap="truncate-end">{prompt ? asyncQuestion ? `Question · Esc back · ${scrollKeys} scroll` : `Request · ${state.prompts.length} pending · ${scrollKeys} scroll` : detailsDivider}</Text>
       <Text color="white">{viewport(prompt ? promptLines : technical, lowerHeight - 1, prompt ? promptOffset : detailOffset)}</Text>
     </Box>}
     <ActivityRow name="Codex" {...activity}/>
+    {pending.length > 0 && <Text color="yellow" wrap="truncate-end">? {pending.length} question{pending.length === 1 ? '' : 's'} · Ctrl+Q {asyncQuestion ? 'back to conversation' : 'review / answer'}</Text>}
     {state.alerts.length > 0 && <Text color="yellow" wrap="truncate-end">! {clean(state.alerts.at(-1)!).replace(/\n/g, ' ')}</Text>}
     <Text color="gray" wrap="truncate-end">{expanded ? '▾ Details · Ctrl+O to close' : '▸ Details · Ctrl+O to expand'}{state.loadingHistory ? ' · Loading older messages…' : ''}</Text>
     <Editor key={prompt ? `prompt:${prompt.id}:${prompt.revision}:${questionIndex}` : 'draft'} value={prompt ? answer : draft} onChange={prompt ? setAnswer : setDraft}

@@ -79,7 +79,7 @@ export function Editor({value, onChange, onSubmit, disabled, secret, width, hist
     }
     if (key.tab || key.escape || key.pageUp || key.pageDown || key.super || key.hyper) return;
     // Application commands stay with App, including SIGTSTP to avoid suspending its private editor.
-    if (key.ctrl && ['c', 'd', 'l', 'o', 'z'].includes(input)) return;
+    if (key.ctrl && ['c', 'd', 'l', 'o', 'q', 'z'].includes(input)) return;
     if (key.return) {
       if (key.meta || key.shift) insert('\n');
       else if (rl.line.trim()) {
