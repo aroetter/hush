@@ -456,3 +456,48 @@ test('editing and scrolling reuse formatted history; session changes refresh it'
     assert.match(app.lastFrame()!, /New output/);
   } finally {app.unmount();}
 });
+
+test('async questions remain discoverable after a turn and can be answered without losing the draft', async () => {
+  const {rpc, session} = await ready();
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle();
+    app.stdin.write('Keep draft'); await settle();
+    item(rpc, {...agent('queued', 'Choose access policy', 'final_answer'), delivery: 'async', questions: [{title: 'Should new meetings appear automatically?', options: ['Automatically', 'Require approval']}]});
+    rpc.event('turn/completed', {threadId: 'root', turn: {id: 'turn-1', status: 'completed'}});
+    item(rpc, agent('later', 'A later update\n'.repeat(40)));
+    await settle();
+    assert.match(app.lastFrame()!, /1 question · Ctrl\+Q/);
+    app.stdin.write('\x11'); await settle();
+    assert.match(app.lastFrame()!, /Should new meetings appear automatically/);
+    assert.match(app.lastFrame()!, /2. Require approval/);
+    app.stdin.write('\x1b'); await settle();
+    assert.match(app.lastFrame()!, /Keep draft/);
+    assert.match(app.lastFrame()!, /1 question · Ctrl\+Q/);
+    app.stdin.write('\x11'); await settle();
+    rpc.handler = async () => {throw new Error('Send failed');};
+    app.stdin.write('2'); await settle(); app.stdin.write('\r'); await settle();
+    assert.match(app.lastFrame()!, /1 question · Ctrl\+Q/);
+    assert.match(app.lastFrame()!, /> 2/);
+    rpc.handler = async () => ({turn: {id: 'answer-turn'}});
+    app.stdin.write('\r'); await settle();
+    assert.match(rpc.calls.at(-1)!.params.input[0].text, /Should new meetings appear automatically.*\nRequire approval/);
+    assert.doesNotMatch(app.lastFrame()!, /1 question · Ctrl\+Q/);
+    assert.match(app.lastFrame()!, /Keep draft/);
+  } finally {app.unmount();}
+});
+
+test('blocking approvals take precedence over async questions', async () => {
+  const {rpc, session} = await ready();
+  item(rpc, {...agent('queued', 'A question'), questions: [{title: 'Choose one?', options: ['A', 'B']}]});
+  const app = render(<App session={session} version="test" onExit={() => {}}/>);
+  try {
+    await settle(); app.stdin.write('\x11'); await settle();
+    rpc.ask(99, 'item/commandExecution/requestApproval', {threadId: 'root', command: 'do-it', availableDecisions: ['decline']});
+    await settle();
+    assert.match(app.lastFrame()!, /Command approval/);
+    app.stdin.write('\x11'); await settle();
+    assert.match(app.lastFrame()!, /Command approval/);
+    assert.equal(rpc.replies.length, 0);
+  } finally {app.unmount();}
+});

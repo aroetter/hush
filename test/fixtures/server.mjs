@@ -39,6 +39,10 @@ lines.on('line', line => {
     send({method: 'item/completed', params: {threadId: 'root', turnId: latestTurn, item: {type: 'agentMessage', id: `progress_${sequence}`, phase: 'commentary', text: 'Inspecting files'}}});
     send({method: 'item/started', params: {threadId: 'root', turnId: latestTurn, item: {type: 'commandExecution', id: `cmd_${sequence}`, command: 'hidden-command-for-test', cwd: process.cwd(), status: 'inProgress', commandActions: [], aggregatedOutput: null, exitCode: null}}});
     if (message.params.input[0].text === 'approval') send({id: 99, method: 'item/commandExecution/requestApproval', params: {threadId: 'root', turnId: latestTurn, command: 'review-this-command', availableDecisions: ['accept', 'decline']}});
+    else if (message.params.input[0].text === 'question') {
+      send({method: 'item/completed', params: {threadId: 'root', turnId: latestTurn, item: {id: 'async-question', type: 'agentMessage', phase: 'final_answer', delivery: 'async', text: 'Choose the release policy.', questions: [{title: 'Release automatically?', options: ['Yes', 'No']}]}}});
+      send({method: 'turn/completed', params: {threadId: 'root', turn: {id: latestTurn, status: 'completed'}}});
+    }
     else if (message.params.input[0].text !== 'wait') {
       send({method: 'item/completed', params: {threadId: 'root', turnId: latestTurn, item: {id: `answer_${sequence}`, type: 'agentMessage', phase: 'final_answer', text: 'Visible test answer.'}}});
       send({method: 'turn/completed', params: {threadId: 'root', turn: {id: latestTurn, status: 'completed'}}});
