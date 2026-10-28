@@ -1,7 +1,13 @@
 # Hush
 
-A quiet terminal UI for Codex: keep the conversation visible while agent activity
-updates in place. Expand **details** for commands, diffs, and logs.
+Keep the conversation with your coding agent visible while its tool activity stays
+out of the way. Two versions share the name:
+
+- **Codex:** a quiet terminal UI that wraps `codex app-server`. Expand **details**
+  for commands, diffs, and logs. Everything below up to [Claude Code](#claude-code)
+  covers this version.
+- **Claude Code:** a mod (plugin) in [`claude/`](claude) that hides tool calls from
+  the chat and lists them in an **Activity** pane. See [Claude Code](#claude-code).
 
 ## Install
 
@@ -124,6 +130,65 @@ To update protocol types from installed Codex: `npm run protocol:refresh`, then
 Hush currently supports text input. Image attachments, remote app-server connections,
 custom client tools, and embedded MCP app UI are not implemented.
 See [the design](docs/design.md) for implementation details.
+
+## Claude Code
+
+The mod hides tool calls (commands, diffs, output) from the Claude Code chat while
+its **Activity** pane is on screen, and lists them there: newest first, marked ✓, ✗,
+or … while running. Click a row to expand its input and output.
+
+### Install from GitHub
+
+At the prompt of a Claude Code terminal session:
+
+```
+/plugin install hush --marketplace aroetter/hush
+```
+
+Answer `y` to add the marketplace, then pick the user scope. From a shell:
+`claude plugin install hush --marketplace aroetter/hush`. Update later with
+`/plugin` → Marketplaces → hush → Update.
+
+### Install from a checkout
+
+To run the mod from this repository, with edits reloading in open sessions, add
+the folder to `~/.claude/settings.json`:
+
+```json
+{
+  "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/src/hush/claude" }
+}
+```
+
+Use the path of your checkout; separate several folders with `:`. New sessions
+load it. Use one install method, not both.
+
+### Use
+
+| Action | Effect |
+| --- | --- |
+| `/hush` | Open the pane, expanded |
+| Click a row | Expand or collapse that call's input and output |
+| **▸ Minimize** (`m`), or the pane's close mark | Shrink to a narrow strip; tool calls stay hidden |
+| **◂ Expand** (`e`) | Restore the full pane |
+| **✕ Close pane** (`x`, in the strip) | Close it; tool calls show inline again |
+| **Show tools in chat** (`c`) | Toggle tool calls back into the chat |
+| Ctrl+O | Claude Code's full transcript, every tool call included |
+
+Hotkeys work while the pane has focus. The pane docks beside the chat when the
+terminal is at least 110 columns wide (it opens by itself at session start from
+144). In a narrower terminal it closes and tool calls show inline; widening the
+terminal brings it back.
+
+### Development
+
+```sh
+claude plugin validate claude   # manifest and hooks
+claude plugin test claude       # the mod's tests
+```
+
+The mod is separate from the Codex build: `tsc` and `npm test` cover only `src/`
+and `test/`.
 
 ## License
 

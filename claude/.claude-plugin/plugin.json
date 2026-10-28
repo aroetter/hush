@@ -1,0 +1,10 @@
+{
+  "name": "hush",
+  "version": "0.1.0",
+  "description": "Hide tool calls from the chat; list them, expandable, in an Activity pane",
+  "author": {
+    "name": "Alex Roetter"
+  },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

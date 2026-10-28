@@ -150,3 +150,7 @@ vite.config.ts.timestamp-*
 
 # macOS Finder metadata
 .DS_Store
+
+# Claude Code mod: types the engine generates on load
+claude/.claude-plugin/types/
+claude/tsconfig.json

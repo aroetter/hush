@@ -1,0 +1,13 @@
+{
+  "name": "hush",
+  "owner": {
+    "name": "Alex Roetter"
+  },
+  "description": "Hush for Claude Code: hide tool calls from the chat and list them in an Activity pane",
+  "plugins": [
+    {
+      "name": "hush",
+      "source": "./claude"
+    }
+  ]
+}
