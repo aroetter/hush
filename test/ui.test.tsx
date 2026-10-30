@@ -10,6 +10,12 @@ import {Session} from '../src/session.js';
 import {parseOptions} from '../src/args.js';
 
 const settle = () => delay(40);
+/** Wait (up to 2s) for the frame to satisfy `ready`, for redraws behind async work like a send. */
+const frameWhen = async (app: {lastFrame: () => string | undefined}, ready: (frame: string) => boolean) => {
+  const end = Date.now() + 2000;
+  while (!ready(app.lastFrame() ?? '') && Date.now() < end) await delay(10);
+  return app.lastFrame()!;
+};
 test('details toggle without moving commands into the conversation', async () => {
   const {rpc, session} = await ready();
   item(rpc, agent('answer', 'Persistent conversation'));
@@ -482,8 +488,9 @@ test('async questions remain discoverable after a turn and can be answered witho
     rpc.handler = async () => ({turn: {id: 'answer-turn'}});
     app.stdin.write('\r'); await settle();
     assert.match(rpc.calls.at(-1)!.params.input[0].text, /Should new meetings appear automatically.*\nRequire approval/);
-    assert.doesNotMatch(app.lastFrame()!, /1 question · Ctrl\+Q/);
-    assert.match(app.lastFrame()!, /Keep draft/);
+    const answered = await frameWhen(app, frame => !/1 question · Ctrl\+Q/.test(frame));
+    assert.doesNotMatch(answered, /1 question · Ctrl\+Q/);
+    assert.match(answered, /Keep draft/);
   } finally {app.unmount();}
 });
 
