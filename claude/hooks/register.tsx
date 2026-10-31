@@ -110,17 +110,11 @@ export const register: Register = on => {
     return { text: `Activity pane opened (shown from ${DOCK_FROM_COLUMNS} columns wide).` }
   })
 
-  // The person's close mark minimizes instead: answering without `next`
-  // keeps the pane open.
+  // Tool rows hide only while the pane is on screen, so redraw them on close.
   on('ui.close', { id: PANE }, async ($, e, next) => {
-    if (e.origin.kind !== 'person') {
-      const closed = await next(e)
-      $.ui.invalidate('ui.render')
-      return closed
-    }
-    await openPane($, true)
-
-    return { value: undefined }
+    const closed = await next(e)
+    $.ui.invalidate('ui.render')
+    return closed
   })
 
   on('tool.call', async ($, e, next) => {
@@ -205,6 +199,8 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Box>
           <Button key="minimize" hotkey="m" label="▸ Minimize" onPress={() => openPane($, true)} />
+          <Text> </Text>
+          <Button key="close" hotkey="x" label="✕ Close" onPress={() => $.ui.close({ id: PANE })} />
           <Text> </Text>
           <Button
             key="toggle-chat"
