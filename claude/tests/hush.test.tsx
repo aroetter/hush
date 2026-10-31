@@ -141,6 +141,20 @@ test('Close pane, in the minimized pane, closes it', async ($, on) => {
   await mini.unmount()
 })
 
+test('Close, in the expanded pane, closes it', async ($, on) => {
+  const closed: string[] = []
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.close', (_, e) => {
+    closed.push(e.id)
+    return { value: undefined }
+  })
+
+  const full = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await full.press({ key: 'close' })
+  expect(closed).toEqual(['activity'])
+  await full.unmount()
+})
+
 test('an inline seat closes the pane; a wide band reopens it', async ($, on) => {
   const clock = mock.clock(on)
   const opens: number[] = []

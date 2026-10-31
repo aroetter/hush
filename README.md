@@ -169,9 +169,9 @@ load it. Use one install method, not both.
 | --- | --- |
 | `/hush` | Open the pane, expanded |
 | Click a row | Expand or collapse that call's input and output |
-| **▸ Minimize** (`m`), or the pane's close mark | Shrink to a narrow strip; tool calls stay hidden |
+| **▸ Minimize** (`m`) | Shrink to a narrow strip; tool calls stay hidden |
 | **◂ Expand** (`e`) | Restore the full pane |
-| **✕ Close pane** (`x`, in the strip) | Close it; tool calls show inline again |
+| **✕ Close** (`x`), or the pane's close mark | Close it; tool calls show inline again |
 | **Show tools in chat** (`c`) | Toggle tool calls back into the chat |
 | Ctrl+O | Claude Code's full transcript, every tool call included |
 
