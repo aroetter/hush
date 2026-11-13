@@ -1,15 +1,85 @@
 # Hush
 
 Keep the conversation with your coding agent visible while its tool activity stays
-out of the way. Two versions share the name:
+out of the way. Hush comes in two separate versions. Install the one for the agent
+you use:
 
-- **Codex:** a quiet terminal UI that wraps `codex app-server`. Expand **details**
-  for commands, diffs, and logs. Everything below up to [Claude Code](#claude-code)
-  covers this version.
-- **Claude Code:** a mod (plugin) in [`claude/`](claude) that hides tool calls from
-  the chat and lists them in an **Activity** pane. See [Claude Code](#claude-code).
+| You use | Go to | What you get |
+| --- | --- | --- |
+| **Claude Code** | [Claude Code users](#claude-code-users) | A plugin (mod) that hides tool calls from the chat and lists them in an **Activity** pane. One command to install. |
+| **OpenAI Codex** | [OpenAI Codex users](#openai-codex-users) | A quiet terminal UI that wraps `codex app-server`. Built from this repository with Node.js. |
 
-## Install
+## Claude Code users
+
+The plugin (also called a mod) hides tool calls (commands, diffs, output) from the
+Claude Code chat while its **Activity** pane is on screen, and lists them there:
+newest first, marked ✓, ✗, or … while running. Click a row to expand its input and output.
+
+### Install from GitHub
+
+Requires only Claude Code. No clone, Node.js, npm, or Codex needed.
+
+At the prompt of a Claude Code terminal session:
+
+```
+/plugin install hush --marketplace aroetter/hush
+```
+
+Answer `y` to add the marketplace, then pick the user scope. Run `/hush` to open
+the pane.
+
+- **From a shell instead:** `claude plugin install hush --marketplace aroetter/hush`
+- **Update:** `/plugin` → Marketplaces → hush → Update
+- **Uninstall:** `/plugin uninstall hush`
+
+### Use
+
+| Action | Effect |
+| --- | --- |
+| `/hush` | Open the pane, expanded |
+| Click a row | Expand or collapse that call's input and output |
+| **▸ Minimize** (`m`) | Shrink to a narrow strip; tool calls stay hidden |
+| **◂ Expand** (`e`) | Restore the full pane |
+| **✕ Close** (`x`), or the pane's close mark | Close it; tool calls show inline again |
+| **Show tools in chat** (`c`) | Toggle tool calls back into the chat |
+| Ctrl+O | Claude Code's full transcript, every tool call included |
+
+Hotkeys work while the pane has focus. The pane docks beside the chat when the
+terminal is at least 110 columns wide (it opens by itself at session start from
+144). In a narrower terminal it closes and tool calls show inline; widening the
+terminal brings it back.
+
+### Working on the mod
+
+Only for changing the mod's code; not needed to use it.
+
+**Run from a checkout.** To run the mod from this repository, with edits
+reloading in open sessions, add the folder to `~/.claude/settings.json`:
+
+```json
+{
+  "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/src/hush/claude" }
+}
+```
+
+Use the path of your checkout; separate several folders with `:`. New sessions
+load it. Use one install method, not both.
+
+**Tests.**
+
+```sh
+claude plugin validate claude   # manifest and hooks
+claude plugin test claude       # the mod's tests
+```
+
+The mod is separate from the Codex build: `tsc` and `npm test` cover only `src/`
+and `test/`.
+
+## OpenAI Codex users
+
+Everything in this section is for Codex only. Claude Code users don't need any of it.
+
+### Install
 
 Requires **Node.js 22+**, npm, and **Codex on your PATH**. Sign in with `codex login`
 if needed.
@@ -26,7 +96,7 @@ npm link
 Keep the checkout; after updating its source, run `npm run build` and restart Hush.
 Your installed Codex is unchanged.
 
-## Run
+### Run
 
 Start in the repository you want to work on:
 
@@ -48,7 +118,7 @@ hush --version                        # Hush and installed Codex versions
 
 Hush supports its documented arguments, not every Codex CLI flag.
 
-## Resume
+### Resume
 
 ```sh
 hush resume             # Pick a session for this directory
@@ -61,7 +131,7 @@ Codex and Hush share saved sessions. In the picker, use **Up/Down**, **Enter**, 
 **n** for more sessions. You can also use `-m` and `-c` when resuming.
 Type `/rename My session name` in the conversation to name the session.
 
-## Controls
+### Controls
 
 | Key | Hush action |
 | --- | --- |
@@ -80,7 +150,7 @@ Pastes of 5+ lines or 500+ characters collapse in the input. Ctrl+G expands/coll
 them; moving into a paste reveals it for editing. Enter sends the full text.
 Input uses standard [readline shortcuts](https://nodejs.org/api/readline.html#tty-keybindings).
 
-## Conversation and details
+### Conversation and details
 
 Conversation shows all main-agent messages, including replies sent while work continues.
 Reasoning, commands, diffs, logs, and subagent messages stay in Details.
@@ -101,7 +171,7 @@ attempt does not mean the task failed. Details opens at the latest failed tool
 from the current turn. Failed turns, connection problems, and requests needing
 your input remain visible. Ctrl+L dismisses alerts.
 
-## Troubleshooting
+### Troubleshooting
 
 - **`hush` not found:** ensure the `bin` directory under `npm prefix -g` is on PATH.
 - **Disconnected or timed out:** restart and resume. Hush does not resend requests.
@@ -110,7 +180,7 @@ your input remain visible. Ctrl+L dismisses alerts.
 
 Uninstall with `npm unlink -g @aroetter/hush`.
 
-## Development and tests
+### Development and tests
 
 From the checkout:
 
@@ -130,65 +200,6 @@ To update protocol types from installed Codex: `npm run protocol:refresh`, then
 Hush currently supports text input. Image attachments, remote app-server connections,
 custom client tools, and embedded MCP app UI are not implemented.
 See [the design](docs/design.md) for implementation details.
-
-## Claude Code
-
-The mod hides tool calls (commands, diffs, output) from the Claude Code chat while
-its **Activity** pane is on screen, and lists them there: newest first, marked ✓, ✗,
-or … while running. Click a row to expand its input and output.
-
-### Install from GitHub
-
-At the prompt of a Claude Code terminal session:
-
-```
-/plugin install hush --marketplace aroetter/hush
-```
-
-Answer `y` to add the marketplace, then pick the user scope. From a shell:
-`claude plugin install hush --marketplace aroetter/hush`. Update later with
-`/plugin` → Marketplaces → hush → Update.
-
-### Install from a checkout
-
-To run the mod from this repository, with edits reloading in open sessions, add
-the folder to `~/.claude/settings.json`:
-
-```json
-{
-  "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/src/hush/claude" }
-}
-```
-
-Use the path of your checkout; separate several folders with `:`. New sessions
-load it. Use one install method, not both.
-
-### Use
-
-| Action | Effect |
-| --- | --- |
-| `/hush` | Open the pane, expanded |
-| Click a row | Expand or collapse that call's input and output |
-| **▸ Minimize** (`m`) | Shrink to a narrow strip; tool calls stay hidden |
-| **◂ Expand** (`e`) | Restore the full pane |
-| **✕ Close** (`x`), or the pane's close mark | Close it; tool calls show inline again |
-| **Show tools in chat** (`c`) | Toggle tool calls back into the chat |
-| Ctrl+O | Claude Code's full transcript, every tool call included |
-
-Hotkeys work while the pane has focus. The pane docks beside the chat when the
-terminal is at least 110 columns wide (it opens by itself at session start from
-144). In a narrower terminal it closes and tool calls show inline; widening the
-terminal brings it back.
-
-### Development
-
-```sh
-claude plugin validate claude   # manifest and hooks
-claude plugin test claude       # the mod's tests
-```
-
-The mod is separate from the Codex build: `tsc` and `npm test` cover only `src/`
-and `test/`.
 
 ## License
 
