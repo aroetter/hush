@@ -6,14 +6,14 @@ you use:
 
 | You use | Go to | What you get |
 | --- | --- | --- |
-| **Claude Code** | [Claude Code users](#claude-code-users) | A mod that hides tool calls from the chat and lists them in an **Activity** pane. One command to install. |
+| **Claude Code** | [Claude Code users](#claude-code-users) | A plugin (mod) that hides tool calls from the chat and lists them in an **Activity** pane. One command to install. |
 | **OpenAI Codex** | [OpenAI Codex users](#openai-codex-users) | A quiet terminal UI that wraps `codex app-server`. Built from this repository with Node.js. |
 
 ## Claude Code users
 
-The mod hides tool calls (commands, diffs, output) from the Claude Code chat while
-its **Activity** pane is on screen, and lists them there: newest first, marked ✓, ✗,
-or … while running. Click a row to expand its input and output.
+The plugin (also called a mod) hides tool calls (commands, diffs, output) from the
+Claude Code chat while its **Activity** pane is on screen, and lists them there:
+newest first, marked ✓, ✗, or … while running. Click a row to expand its input and output.
 
 ### Install from GitHub
 
@@ -25,23 +25,12 @@ At the prompt of a Claude Code terminal session:
 /plugin install hush --marketplace aroetter/hush
 ```
 
-Answer `y` to add the marketplace, then pick the user scope. From a shell:
-`claude plugin install hush --marketplace aroetter/hush`. Update later with
-`/plugin` → Marketplaces → hush → Update. Uninstall with `/plugin uninstall hush`.
+Answer `y` to add the marketplace, then pick the user scope. Run `/hush` to open
+the pane.
 
-### Install from a checkout
-
-For working on the mod itself. To run the mod from this repository, with edits
-reloading in open sessions, add the folder to `~/.claude/settings.json`:
-
-```json
-{
-  "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/src/hush/claude" }
-}
-```
-
-Use the path of your checkout; separate several folders with `:`. New sessions
-load it. Use one install method, not both.
+- **From a shell instead:** `claude plugin install hush --marketplace aroetter/hush`
+- **Update:** `/plugin` → Marketplaces → hush → Update
+- **Uninstall:** `/plugin uninstall hush`
 
 ### Use
 
@@ -60,7 +49,23 @@ terminal is at least 110 columns wide (it opens by itself at session start from
 144). In a narrower terminal it closes and tool calls show inline; widening the
 terminal brings it back.
 
-### Development
+### Working on the mod
+
+Only for changing the mod's code; not needed to use it.
+
+**Run from a checkout.** To run the mod from this repository, with edits
+reloading in open sessions, add the folder to `~/.claude/settings.json`:
+
+```json
+{
+  "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/src/hush/claude" }
+}
+```
+
+Use the path of your checkout; separate several folders with `:`. New sessions
+load it. Use one install method, not both.
+
+**Tests.**
 
 ```sh
 claude plugin validate claude   # manifest and hooks
