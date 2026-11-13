@@ -25,8 +25,8 @@ At the prompt of a Claude Code terminal session:
 /plugin install hush --marketplace aroetter/hush
 ```
 
-Answer `y` to add the marketplace, then pick the user scope. Run `/hush` to open
-the pane.
+Answer `y` to add the marketplace, then pick the user scope. Start a new Claude
+Code session: the pane opens by itself. `/hush` reopens it after you close it.
 
 - **From a shell instead:** `claude plugin install hush --marketplace aroetter/hush`
 - **Update:** `/plugin` → Marketplaces → hush → Update
