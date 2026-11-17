@@ -80,17 +80,22 @@ export const register: Register = on => {
   // What the render hooks last saw; drawing is pure, so a timer acts on these.
   let isSeatedInline = false
   let terminalColumns = 0
+  let isFullscreen: boolean | undefined
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'hush',
       description: 'Open the Activity pane (tool calls hidden from the chat)',
     })
-    void openPane($, await read($, isMinimized))
+    // The timer opens the pane once the layout can dock it; never on the main screen.
+    await update($, isClosedForNarrow, () => true)
 
     // A narrow terminal seats the pane inline above the prompt: close it there
     // (tool rows come back inline) and reopen it once the terminal can dock it.
     $.clock.every(500, async () => {
+      if (isFullscreen !== true) {
+        return
+      }
       if (isSeatedInline) {
         isSeatedInline = false
         await update($, isClosedForNarrow, () => true)
@@ -105,6 +110,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'hush' }, async $ => {
+    await update($, isClosedForNarrow, () => false)
     await openPane($, false)
 
     return { text: `Activity pane opened (shown from ${DOCK_FROM_COLUMNS} columns wide).` }
@@ -161,14 +167,16 @@ export const register: Register = on => {
   // The band re-runs on every width change, so it reports the terminal's width.
   on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
     terminalColumns = e.viewport?.columns ?? terminalColumns
+    isFullscreen = e.viewport?.isFullscreen ?? isFullscreen
 
     return next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
+    isFullscreen = e.viewport?.isFullscreen ?? isFullscreen
     isSeatedInline = e.props.placement === 'inline'
-    if (isSeatedInline) {
+    if (isSeatedInline && isFullscreen !== false) {
       return <Box />
     }
     const list = await read($, calls)

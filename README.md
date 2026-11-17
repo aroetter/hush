@@ -45,9 +45,12 @@ Code session: the pane opens by itself. `/hush` reopens it after you close it.
 | Ctrl+O | Claude Code's full transcript, every tool call included |
 
 Hotkeys work while the pane has focus. The pane docks beside the chat when the
-terminal is at least 110 columns wide (it opens by itself at session start from
-144). In a narrower terminal it closes and tool calls show inline; widening the
+terminal is at least 110 columns wide, and then opens by itself at session start.
+In a narrower terminal it closes and tool calls show inline; widening the
 terminal brings it back.
+
+This applies to Claude Code's fullscreen layout. With `"tui": "default"`, the
+pane does not open by itself. `/hush` opens it above the prompt, at any width.
 
 ### Working on the mod
 
