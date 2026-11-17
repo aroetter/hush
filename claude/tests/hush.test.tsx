@@ -178,7 +178,12 @@ test('an inline seat closes the pane; a wide band reopens it', async ($, on) => 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const startOpens = opens.length
 
-  const inline = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, placement: 'inline' } })
+  const inline = await $.ui.mount({
+    ...PANE,
+    surface: 'terminal',
+    viewport: { columns: 90, rows: 40, isFullscreen: true },
+    props: { ...PANE.props, placement: 'inline' },
+  })
   await inline.unmount()
   await clock.advance(500)
   expect(closed).toEqual(['activity'])
@@ -190,13 +195,43 @@ test('an inline seat closes the pane; a wide band reopens it', async ($, on) => 
     surface: 'terminal',
     props: { hasSurvey: false, isWorking: false },
   } as const
-  const narrow = await $.ui.mount({ ...BAND, viewport: { columns: 80, rows: 40 } })
+  const narrow = await $.ui.mount({ ...BAND, viewport: { columns: 80, rows: 40, isFullscreen: true } })
   await narrow.unmount()
   await clock.advance(500)
   expect(opens.length).toBe(startOpens)
 
-  const wide = await $.ui.mount({ ...BAND, viewport: { columns: 160, rows: 40 } })
+  const wide = await $.ui.mount({ ...BAND, viewport: { columns: 160, rows: 40, isFullscreen: true } })
   await wide.unmount()
   await clock.advance(500)
   expect(opens.length).toBe(startOpens + 1)
+})
+
+test('on the main screen the pane opens only from /hush, and stays open inline', async ($, on) => {
+  const clock = mock.clock(on)
+  const opens: number[] = []
+  const closed: string[] = []
+  on('command.register', () => ({ value: { command: 'hush' } }))
+  on('ui.open', () => {
+    opens.push(1)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', (_, e) => {
+    closed.push(e.id)
+    return { value: undefined }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('command.run', () => ({ text: '' }))
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.advance(500)
+  expect(opens.length).toBe(0)
+
+  await $.command.run({ command: 'hush' })
+  const viewport = { columns: 200, rows: 40, isFullscreen: false }
+  const inline = await $.ui.mount({ ...PANE, surface: 'terminal', viewport, props: { ...PANE.props, placement: 'inline' } })
+  expect((await inline.find({ type: 'Text', text: /No tool calls yet/ }))?.text).toBe('No tool calls yet.')
+  await inline.unmount()
+  await clock.advance(500)
+  expect(opens.length).toBe(1)
+  expect(closed).toEqual([])
 })

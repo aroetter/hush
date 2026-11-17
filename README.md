@@ -49,6 +49,9 @@ terminal is at least 110 columns wide (it opens by itself at session start from
 144). In a narrower terminal it closes and tool calls show inline; widening the
 terminal brings it back.
 
+This applies to Claude Code's fullscreen layout. With `"tui": "default"`, the
+pane does not open by itself. `/hush` opens it above the prompt, at any width.
+
 ### Working on the mod
 
 Only for changing the mod's code; not needed to use it.
